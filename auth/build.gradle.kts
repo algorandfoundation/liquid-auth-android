@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "foundation.algorand.auth"
-    compileSdk = 33
+    compileSdk = 34
 
     defaultConfig {
         minSdk = 24
@@ -35,6 +35,10 @@ android {
 }
 
 dependencies {
+    // Core
+    implementation("androidx.core:core-ktx:1.12.0")
+    implementation("androidx.datastore:datastore-preferences:1.0.0")
+
     // AlgoSDK
     implementation("com.algorand:algosdk:2.4.0")
     // FIDO2
@@ -57,10 +61,6 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:$okhttpVersion")
     implementation("com.squareup.okhttp3:logging-interceptor:$okhttpVersion")
     implementation("ru.gildor.coroutines:kotlin-coroutines-okhttp:1.0")
-
-    // Core
-    implementation("androidx.core:core-ktx:1.12.0")
-    implementation("androidx.datastore:datastore-preferences:1.0.0")
 
     // Dev Dependencies
     testImplementation("junit:junit:4.13.2")
