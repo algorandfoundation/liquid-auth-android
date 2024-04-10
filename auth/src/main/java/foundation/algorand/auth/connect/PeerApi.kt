@@ -3,6 +3,7 @@ package foundation.algorand.auth.connect
 import android.content.Context
 import android.util.Log
 import org.webrtc.*
+import java.nio.ByteBuffer
 
 class PeerApi(context: Context) {
     companion object {
@@ -182,6 +183,13 @@ class PeerApi(context: Context) {
                 }
             }
         })
+    }
+    fun send(message: String){
+        if(dataChannel === null){
+            throw Exception("dataChannel is null")
+        }
+        val buffer = ByteBuffer.wrap(message.toByteArray())
+        dataChannel?.send(DataChannel.Buffer(buffer, false))
     }
     fun destroy(){
         dataChannel?.close()
