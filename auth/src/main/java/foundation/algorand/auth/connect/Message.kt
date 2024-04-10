@@ -1,8 +1,8 @@
-package foundation.algorand.auth.verify
+package foundation.algorand.auth.connect
 
 import android.util.Log
 import com.google.mlkit.vision.barcode.common.Barcode
-import foundation.algorand.auth.verify.crypto.KeyPairs
+import foundation.algorand.auth.crypto.KeyPairs
 import org.apache.commons.codec.binary.Base64
 import org.json.JSONObject
 import java.nio.charset.StandardCharsets
@@ -17,7 +17,7 @@ class Message @Inject constructor(
     var signature: String? = null
 ) {
     companion object {
-        const val TAG = "verify.Message"
+        const val TAG = "connect.Message"
         /**
          * Parse the `Barcode`
          *

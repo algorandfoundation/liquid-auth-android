@@ -1,4 +1,4 @@
-package foundation.algorand.auth.verify.crypto
+package foundation.algorand.auth.crypto
 
 import android.util.Log
 import com.algorand.algosdk.account.Account

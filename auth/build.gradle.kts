@@ -35,14 +35,16 @@ android {
 }
 
 dependencies {
-    // Core
-    implementation("androidx.core:core-ktx:1.12.0")
-    implementation("androidx.datastore:datastore-preferences:1.0.0")
-
     // AlgoSDK
     implementation("com.algorand:algosdk:2.4.0")
     // FIDO2
     implementation("com.google.android.gms:play-services-fido:20.1.0")
+    // Barcode Scanner
+    implementation("com.google.mlkit:barcode-scanning-common:17.0.0")
+    implementation("com.google.mlkit:camera:16.0.0-beta3")
+    // Signaling Service
+    implementation("io.socket:socket.io-client:2.1.0")
+    implementation("org.webrtc:google-webrtc:1.0.32006")
 
     val coroutineVersion by extra { "1.7.1" }
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:$coroutineVersion")
@@ -51,15 +53,11 @@ dependencies {
 
     val hiltVersion by extra { "2.48" }
     implementation("com.google.dagger:hilt-android:$hiltVersion")
-    implementation("com.google.mlkit:camera:16.0.0-beta3")
-    implementation("androidx.legacy:legacy-support-v4:1.0.0")
-    implementation("com.google.mlkit:barcode-scanning-common:17.0.0")
     kapt("com.google.dagger:hilt-compiler:$hiltVersion")
     kapt("androidx.hilt:hilt-compiler:1.1.0")
 
     val okhttpVersion by extra { "4.12.0" }
     implementation("com.squareup.okhttp3:okhttp:$okhttpVersion")
-    implementation("com.squareup.okhttp3:logging-interceptor:$okhttpVersion")
     implementation("ru.gildor.coroutines:kotlin-coroutines-okhttp:1.0")
 
     // Dev Dependencies

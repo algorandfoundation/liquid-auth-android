@@ -19,10 +19,11 @@ import com.google.android.gms.fido.fido2.api.common.AuthenticatorErrorResponse
 import com.google.android.gms.fido.fido2.api.common.PublicKeyCredential
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanner
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
+import foundation.algorand.auth.Cookie
 import foundation.algorand.auth.fido2.*
-import foundation.algorand.auth.verify.ConnectApi
-import foundation.algorand.auth.verify.Message
-import foundation.algorand.auth.verify.crypto.KeyPairs
+import foundation.algorand.auth.connect.ConnectApi
+import foundation.algorand.auth.connect.Message
+import foundation.algorand.auth.crypto.KeyPairs
 import foundation.algorand.demo.databinding.ActivityMainBinding
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
@@ -34,20 +35,28 @@ import ru.gildor.coroutines.okhttp.await
 import java.security.Security
 
 class MainActivity : AppCompatActivity() {
-    val viewModel: MainViewModel by viewModels()
+    companion object {
+        private const val TAG = "MainActivity"
+    }
+    private val viewModel: MainViewModel by viewModels()
     private lateinit var binding: ActivityMainBinding
 
+    private val cookieJar = Cookies()
+
     // Third Party APIs
-    private var httpClient = OkHttpClient()
+    private var httpClient = OkHttpClient.Builder()
+        .cookieJar(cookieJar)
+        .build()
+
     private lateinit var scanner: GmsBarcodeScanner
-    private var fido2Client: Fido2ApiClient? = null
 
     // FIDO/Auth interfaces
-    val connectApi = ConnectApi(httpClient)
-    val attestationApi = AttestationApi(httpClient)
-    val assertionApi = AssertionApi(httpClient)
+    private var fido2Client: Fido2ApiClient? = null
+    private val connectApi = ConnectApi(httpClient)
+    private val attestationApi = AttestationApi(httpClient)
+    private val assertionApi = AssertionApi(httpClient)
 
-    val userAgent = "${BuildConfig.APPLICATION_ID}/${BuildConfig.VERSION_NAME} " +
+    private val userAgent = "${BuildConfig.APPLICATION_ID}/${BuildConfig.VERSION_NAME} " +
             "(Android ${Build.VERSION.RELEASE}; ${Build.MODEL}; ${Build.BRAND})"
 
     // Register/Attestation Intent Launcher
@@ -65,7 +74,6 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
         // Set Security
         val policy = StrictMode.ThreadPolicy.Builder().permitAll().build()
         StrictMode.setThreadPolicy(policy)
@@ -84,10 +92,11 @@ class MainActivity : AppCompatActivity() {
 
         binding.connectButton.setOnClickListener {
             connect()
+
         }
         binding.registerButton.setOnClickListener {
             lifecycleScope.launch {
-                register(viewModel.message.value!!, viewModel.session.value!!)
+                register(viewModel.message.value!!)
             }
         }
         binding.authenticateButton.setOnClickListener {
@@ -96,9 +105,10 @@ class MainActivity : AppCompatActivity() {
             }
         }
         binding.disconnectButton.setOnClickListener {
+            cookieJar.clear()
             setSession(null)
+            connectApi.disconnect()
         }
-
     }
     /**
      * Connect/Proof of Knowledge API
@@ -126,15 +136,10 @@ class MainActivity : AppCompatActivity() {
 
                 // Connect to Service
                 lifecycleScope.launch {
-                    // Connect to Service and pass in optional KeyPair for signing,
-                    // the message must be signed if no KeyPair is provided
-                    val response = connectApi.submit(msg, KeyPairs.getKeyPair(account.toMnemonic())).await()
-                    // Save the current session for future API requests
-                    val session = Cookie.fromResponse(response)
-
+                    val session = connectApi.connect(application, msg, KeyPairs.getKeyPair(account.toMnemonic()))
                     // Update Render
                     viewModel.setMessage(msg)
-                    setSession(session!!)
+                    setSession(session?.let { Cookie.getID(it) })
                 }
             }
             .addOnCanceledListener {
@@ -151,9 +156,9 @@ class MainActivity : AppCompatActivity() {
      * Receives PublicKeyCredentialCreationOptions from the FIDO2 Server and launches
      * the authenticator Intent using the handleAuthenticatorAttestationResult Handler
      */
-    private suspend fun register(msg: Message, sessionCookie: String, options: JSONObject = JSONObject()) {
+    private suspend fun register(msg: Message, options: JSONObject = JSONObject()) {
         // FIDO2 Server API Response for PublicKeyCredentialCreationOptions
-        val response = attestationApi.postAttestationOptions(msg.origin, userAgent, sessionCookie, options).await()
+        val response = attestationApi.postAttestationOptions(msg.origin, userAgent, options).await()
         // Convert ResponseBody to FIDO2 PublicKeyCredentialCreationOptions
         val pubKeyCredentialCreationOptions = response.body!!.toPublicKeyCredentialCreationOptions()
         // Kick off FIDO2 Client Intent
@@ -193,7 +198,6 @@ class MainActivity : AppCompatActivity() {
                         attestationApi.postAttestationResult(
                             viewModel.message.value!!.origin,
                             userAgent,
-                            viewModel.session.value!!,
                             credential
                         ).await()
 
@@ -217,7 +221,6 @@ class MainActivity : AppCompatActivity() {
         val response = assertionApi.postAssertionOptions(
             viewModel.message.value!!.origin,
             userAgent,
-            viewModel.session.value,
             viewModel.credential.value!!.id
         ).await()
         val publicKeyCredentialRequestOptions = response.body!!.toPublicKeyCredentialRequestOptions()
@@ -253,7 +256,6 @@ class MainActivity : AppCompatActivity() {
                         val response = assertionApi.postAssertionResult(
                             viewModel.message.value!!.origin,
                             userAgent,
-                            viewModel.session.value!!,
                             credential
                         ).await()
 

@@ -82,13 +82,15 @@ dependencies {
     implementation("androidx.legacy:legacy-support-v4:1.0.0")
     implementation("com.google.mlkit:barcode-scanning-common:17.0.0")
     kapt("com.google.dagger:hilt-compiler:$hiltVersion")
-    kapt("androidx.hilt:hilt-compiler:1.1.0")
+    kapt("androidx.hilt:hilt-compiler:1.2.0")
 
     // HTTP Requests
     val okhttpVersion by extra { "4.12.0" }
     implementation("com.squareup.okhttp3:okhttp:$okhttpVersion")
     implementation("com.squareup.okhttp3:logging-interceptor:$okhttpVersion")
     implementation("ru.gildor.coroutines:kotlin-coroutines-okhttp:1.0")
+    implementation("io.socket:socket.io-client:2.1.0")
+    implementation("org.webrtc:google-webrtc:1.0.32006")
 
     // Core
     implementation("androidx.core:core-ktx:1.12.0")

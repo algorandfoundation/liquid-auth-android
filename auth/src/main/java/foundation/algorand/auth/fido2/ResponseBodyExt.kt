@@ -2,6 +2,7 @@ package foundation.algorand.auth.fido2
 
 import android.util.JsonReader
 import com.google.android.gms.fido.fido2.api.common.*
+import foundation.algorand.auth.crypto.decodeBase64
 import okhttp3.ResponseBody
 @Deprecated("Use the new CredentialManager API")
 fun ResponseBody.toPublicKeyCredentialRequestOptions(): PublicKeyCredentialRequestOptions{
