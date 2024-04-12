@@ -1,9 +1,12 @@
 package foundation.algorand.auth.fido2
 
 import android.util.JsonReader
+import android.util.Log
 import com.google.android.gms.fido.fido2.api.common.*
 import foundation.algorand.auth.crypto.decodeBase64
 import okhttp3.ResponseBody
+import org.json.JSONObject
+
 @Deprecated("Use the new CredentialManager API")
 fun ResponseBody.toPublicKeyCredentialRequestOptions(): PublicKeyCredentialRequestOptions{
     val builder = PublicKeyCredentialRequestOptions.Builder()
@@ -16,6 +19,7 @@ fun ResponseBody.toPublicKeyCredentialRequestOptions(): PublicKeyCredentialReque
                 "allowCredentials" -> builder.setAllowList(parseCredentialDescriptors(reader))
                 "rpId" -> builder.setRpId(reader.nextString())
                 "timeout" -> builder.setTimeoutSeconds(reader.nextDouble())
+
                 else -> reader.skipValue()
             }
         }
@@ -45,11 +49,12 @@ fun ResponseBody.toPublicKeyCredentialCreationOptions(): PublicKeyCredentialCrea
                 )
 
                 "rp" -> builder.setRp(parseRp(reader))
-                "extensions" -> reader.skipValue() // Unused
+                "extensions" -> reader.skipValue()
             }
         }
         reader.endObject()
     }
+    Log.d("FIDO2", "Parsed PublicKeyCredentialCreationOptions: $builder")
     return builder.build()
 }
 

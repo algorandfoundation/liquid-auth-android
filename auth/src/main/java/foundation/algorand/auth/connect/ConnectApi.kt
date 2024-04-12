@@ -29,34 +29,17 @@ class ConnectApi @Inject constructor(
 
     private var socket: Socket? = null
     var peerApi: PeerApi? = null
-
-    /**
-     * Submit Verification Message
-     *
-     */
-    fun submit(message: Message, keyPair: KeyPair?) : Call {
-        if(message.wallet === null){
-            throw Exception("Missing wallet public key")
-        }
-        if(message.signature === null){
-            if(keyPair === null){
-                throw Exception("Message is not signed and no keyPair provided")
-            } else {
-                message.sign(keyPair)
-            }
-        }
-
-        // TODO: Create specification for URL Scheme
-        val path = "${message.origin}/connect/response"
-        val body = message.toJSON().toString().toRequestBody("application/json".toMediaTypeOrNull())
+    fun session(message: AuthMessage) : Call {
+                // TODO: Create specification for URL Scheme
+        val path = "${message.origin}/auth/session"
         return client.newCall(
             Request.Builder()
                 .url(path)
-                .method("POST", body)
+                .method("GET", null)
                 .build()
         )
     }
-    fun signal(context: Context, message: Message, onStateChange: (String)-> Unit, onMessage: (String) -> Unit) {
+    fun signal(context: Context, message: AuthMessage, onStateChange: (String)-> Unit, onMessage: (String) -> Unit) {
         // Handle existing connections
         if(socket !== null){
             socket?.close()
@@ -105,12 +88,8 @@ class ConnectApi @Inject constructor(
     /**
      * Connect to the Origin Signalling Server
      */
-    suspend fun connect(context: Context, message: Message, keyPair: KeyPair? = null, onStateChange: (String) -> Unit, onMessage: (String) -> Unit): String? {
-        // Submit the message to the origin server,
-        // this allows for a valid session between the two parties
-        val response = submit(message, keyPair).await()
+    fun connect(context: Context, message: AuthMessage, onStateChange: (String) -> Unit, onMessage: (String) -> Unit) {
         signal(context, message, onStateChange, onMessage)
-        return Cookie.fromResponse(response)
     }
     fun disconnect(){
         socket?.close()
