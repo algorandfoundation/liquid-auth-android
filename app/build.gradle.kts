@@ -81,6 +81,7 @@ dependencies {
     implementation("com.google.mlkit:camera:16.0.0-beta3")
     implementation("androidx.legacy:legacy-support-v4:1.0.0")
     implementation("com.google.mlkit:barcode-scanning-common:17.0.0")
+    implementation("androidx.biometric:biometric-ktx:1.2.0-alpha05")
     kapt("com.google.dagger:hilt-compiler:$hiltVersion")
     kapt("androidx.hilt:hilt-compiler:1.2.0")
 

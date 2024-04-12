@@ -12,7 +12,13 @@ import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
+import androidx.biometric.BiometricPrompt
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
+import com.algorand.algosdk.kmd.client.model.SignTransactionRequest
+import com.algorand.algosdk.transaction.SignedTransaction
+import com.algorand.algosdk.transaction.Transaction
+import com.algorand.algosdk.util.Encoder
 import com.google.android.gms.fido.Fido
 import com.google.android.gms.fido.fido2.Fido2ApiClient
 import com.google.android.gms.fido.fido2.api.common.AuthenticatorErrorResponse
@@ -20,19 +26,27 @@ import com.google.android.gms.fido.fido2.api.common.PublicKeyCredential
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanner
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 import foundation.algorand.auth.Cookie
-import foundation.algorand.auth.fido2.*
 import foundation.algorand.auth.connect.ConnectApi
 import foundation.algorand.auth.connect.Message
 import foundation.algorand.auth.crypto.KeyPairs
+import foundation.algorand.auth.crypto.decodeBase64
+import foundation.algorand.auth.fido2.*
 import foundation.algorand.demo.databinding.ActivityMainBinding
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import okhttp3.OkHttpClient
+import org.apache.commons.codec.binary.Base64
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.json.JSONArray
 import org.json.JSONObject
 import ru.gildor.coroutines.okhttp.await
+import java.io.IOException
+import java.security.KeyPair
 import java.security.Security
+import java.util.concurrent.Executor
+import kotlin.coroutines.resume
+import kotlin.coroutines.suspendCoroutine
+
 
 class MainActivity : AppCompatActivity() {
     companion object {
@@ -59,6 +73,10 @@ class MainActivity : AppCompatActivity() {
     private val userAgent = "${BuildConfig.APPLICATION_ID}/${BuildConfig.VERSION_NAME} " +
             "(Android ${Build.VERSION.RELEASE}; ${Build.MODEL}; ${Build.BRAND})"
 
+    private lateinit var biometricPrompt: BiometricPrompt
+    private lateinit var promptInfo: BiometricPrompt.PromptInfo
+    private lateinit var executor: Executor
+
     // Register/Attestation Intent Launcher
     private val attestationIntentLauncher = registerForActivityResult(
         ActivityResultContracts.StartIntentSenderForResult(),
@@ -83,7 +101,7 @@ class MainActivity : AppCompatActivity() {
         // Create FIDO Client, TODO: refactor to Credential Manager
         fido2Client = Fido2ApiClient(this@MainActivity)
         scanner = GmsBarcodeScanning.getClient(this@MainActivity)
-
+        executor = ContextCompat.getMainExecutor(this)
         // View Bindings
         binding = ActivityMainBinding.inflate(layoutInflater)
         binding.lifecycleOwner = this
@@ -104,10 +122,87 @@ class MainActivity : AppCompatActivity() {
                 authenticate()
             }
         }
+//        viewModel.message.observe(this) {
+//            binding.signalButton.visibility = if (it === null) View.INVISIBLE else View.VISIBLE
+//        }
+        binding.signalButton.setOnClickListener {
+            connectApi.signal(application, viewModel.message.value!!, {
+                Log.d(TAG, "onStateChange($it)")
+            }) {
+                handleMessages(viewModel.message.value!!, it, KeyPairs.getKeyPair(viewModel.account.value!!.toMnemonic()))
+            }
+            val response = JSONObject()
+            response.put("device", android.os.Build.MODEL)
+            response.put("origin", viewModel.message.value!!.origin)
+            viewModel.credential.value?.let {
+                response.put("credId", it.id)
+            }
+            response.put("type", "signal")
+            connectApi.peerApi?.send(response.toString())
+
+        }
+
+
         binding.disconnectButton.setOnClickListener {
             cookieJar.clear()
             setSession(null)
             connectApi.disconnect()
+        }
+    }
+
+    suspend fun biometrics(msg: Message, txn: Transaction):BiometricPrompt.AuthenticationResult? {
+        return suspendCoroutine { continuation ->
+            biometricPrompt = BiometricPrompt(this, executor,
+                object : BiometricPrompt.AuthenticationCallback() {
+                    override fun onAuthenticationError(errorCode: Int,
+                                                       errString: CharSequence) {
+                        super.onAuthenticationError(errorCode, errString)
+                        continuation.resume(null)
+                    }
+
+                    override fun onAuthenticationSucceeded(
+                        result: BiometricPrompt.AuthenticationResult) {
+                        super.onAuthenticationSucceeded(result)
+                        continuation.resume(result)
+                    }
+
+                    override fun onAuthenticationFailed() {
+                        super.onAuthenticationFailed()
+                        continuation.resume(null)
+                    }
+                })
+            promptInfo = BiometricPrompt.PromptInfo.Builder()
+                .setTitle("${txn.type} Transaction ${txn.assetIndex}")
+                .setSubtitle("From: ${txn.sender.toString().substring(0, 4)} To: ${txn.receiver.toString().substring(0, 4)} Amount: ${txn.amount}")
+                .setNegativeButtonText("Cancel")
+                .build()
+            biometricPrompt.authenticate(promptInfo)
+        }
+    }
+    private fun decodeUnsignedTransaction(unsignedTxn: String): Transaction? {
+       return  Encoder.decodeFromMsgPack(unsignedTxn.decodeBase64(), Transaction::class.java)
+    }
+    private fun handleMessages(authMessage: Message, msgStr: String, keyPair: KeyPair){
+        // DataChannel Message Callback
+        val message = JSONObject(msgStr)
+        if(message.get("type") == "transaction") {
+            lifecycleScope.launch {
+                // Decode the Transaction
+                val txn = decodeUnsignedTransaction(message.get("txn").toString())
+                // Display a biometric prompt with some transaction details
+                val biometricResult = biometrics(authMessage, txn!!)
+                if(biometricResult !== null){
+                    val bytes = txn.bytesToSign()
+                    val signatureBytes = KeyPairs.rawSignBytes(bytes, keyPair.private)
+                    val sig = Base64.encodeBase64URLSafeString(signatureBytes)
+                    val responseObj = JSONObject()
+                    responseObj.put("sig", sig)
+                    responseObj.put("txId", txn.txID())
+                    responseObj.put("type", "transaction-signature")
+                    Log.d(TAG, "Sending: ${responseObj.toString()}")
+                    connectApi.peerApi?.send(responseObj.toString())
+                }
+            }
         }
     }
     /**
@@ -121,7 +216,6 @@ class MainActivity : AppCompatActivity() {
         val account = viewModel.account.value!!
         scanner.startScan()
             .addOnSuccessListener { barcode ->
-                Log.d("Scan Barcode", "Doing stuff")
                 // Decode Barcode Message
                 val msg = Message.fromBarcode(barcode)
                 // Add wallet to Message
@@ -133,10 +227,15 @@ class MainActivity : AppCompatActivity() {
                 // signer.update(bytes)
                 // msg.signature = signer.sign()
 
-
                 // Connect to Service
                 lifecycleScope.launch {
-                    val session = connectApi.connect(application, msg, KeyPairs.getKeyPair(account.toMnemonic()))
+                    val keyPair = KeyPairs.getKeyPair(account.toMnemonic())
+                    // Connect to the service and if the message is unsigned, pass in a keypair
+                    val session = connectApi.connect(application, msg, keyPair, {
+                        Log.d(TAG, "onStateChange($it)")
+                    }) {
+                        handleMessages(msg, it, keyPair)
+                    }
                     // Update Render
                     viewModel.setMessage(msg)
                     setSession(session?.let { Cookie.getID(it) })
@@ -204,6 +303,14 @@ class MainActivity : AppCompatActivity() {
                         // Update Render/State
                         viewModel.setCredential(credential)
                         Toast.makeText(this@MainActivity, "Registered Credentials!", Toast.LENGTH_LONG).show()
+
+                        val credMessage = JSONObject()
+                        credMessage.put("device", android.os.Build.MODEL)
+                        credMessage.put("origin", viewModel.message.value!!.origin)
+                        credMessage.put("id", credential.id)
+                        credMessage.put("prevCounter", 0)
+                        credMessage.put("type", "credential")
+                        connectApi.peerApi!!.send(credMessage.toString())
                     }
 
                 }
@@ -263,6 +370,7 @@ class MainActivity : AppCompatActivity() {
                         val data = response.body!!.string()
                         val json = JSONObject(data)
                         val creds = json.get("credentials") as JSONArray
+
                         if(creds.length() > 0) {
                             for (i in 0 until creds.length()) {
                                 val cred: JSONObject = creds.getJSONObject(i)
@@ -273,6 +381,13 @@ class MainActivity : AppCompatActivity() {
                         } else {
                             viewModel.setCount(0)
                         }
+                        val credMessage = JSONObject()
+                        credMessage.put("device", android.os.Build.MODEL)
+                        credMessage.put("origin", viewModel.message.value!!.origin)
+                        credMessage.put("id", credential.id)
+                        credMessage.put("prevCounter", viewModel.count.value!!)
+                        credMessage.put("type", "credential")
+                        connectApi.peerApi!!.send(credMessage.toString())
                     }
                 }
             }

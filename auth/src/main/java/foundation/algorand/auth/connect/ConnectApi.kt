@@ -28,7 +28,7 @@ class ConnectApi @Inject constructor(
     }
 
     private var socket: Socket? = null
-    private var peerApi: PeerApi? = null
+    var peerApi: PeerApi? = null
 
     /**
      * Submit Verification Message
@@ -56,15 +56,7 @@ class ConnectApi @Inject constructor(
                 .build()
         )
     }
-
-    /**
-     * Connect to the Origin Signalling Server
-     */
-    suspend fun connect(context: Context, message: Message, keyPair: KeyPair? = null): String? {
-        // Submit the message to the origin server,
-        // this allows for a valid session between the two parties
-        val response = submit(message, keyPair).await()
-
+    fun signal(context: Context, message: Message, onStateChange: (String)-> Unit, onMessage: (String) -> Unit) {
         // Handle existing connections
         if(socket !== null){
             socket?.close()
@@ -102,19 +94,22 @@ class ConnectApi @Inject constructor(
         }
 
         // Handle DataChannel Messages
-        peerApi?.createDataChannel("data") {
-            Log.d(TAG, "onDataChannelMessage($it)")
-            val bytes = it.decodeBase64()
-            val signatureBytes = KeyPairs.rawSignBytes(bytes, keyPair!!.private)
-            val sig = Base64.encodeBase64URLSafeString(signatureBytes)
-            peerApi?.send(sig)
-        }
+        peerApi?.createDataChannel("data", onStateChange, onMessage)
 
         // Create the Peering Offer
         peerApi?.createOffer {
             Log.d(TAG, "createOffer(${it?.description})")
             socket!!.emit("call-description", it?.description.toString())
         }
+    }
+    /**
+     * Connect to the Origin Signalling Server
+     */
+    suspend fun connect(context: Context, message: Message, keyPair: KeyPair? = null, onStateChange: (String) -> Unit, onMessage: (String) -> Unit): String? {
+        // Submit the message to the origin server,
+        // this allows for a valid session between the two parties
+        val response = submit(message, keyPair).await()
+        signal(context, message, onStateChange, onMessage)
         return Cookie.fromResponse(response)
     }
     fun disconnect(){

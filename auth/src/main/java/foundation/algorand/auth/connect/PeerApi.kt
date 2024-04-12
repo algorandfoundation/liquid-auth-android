@@ -158,7 +158,7 @@ class PeerApi(context: Context) {
             }
         }, MediaConstraints())
     }
-    fun createDataChannel(label: String, onMessage: (String) ->Unit ){
+    fun createDataChannel(label: String, onStateChange: (String)-> Unit, onMessage: (String) ->Unit ){
         if(peerConnection === null){
             throw Exception("peerConnection is null")
         }
@@ -171,6 +171,7 @@ class PeerApi(context: Context) {
 
             override fun onStateChange() {
                 Log.d(TAG, "onStateChange")
+                onStateChange(dataChannel?.state().toString())
             }
 
             override fun onMessage(p0: DataChannel.Buffer?) {

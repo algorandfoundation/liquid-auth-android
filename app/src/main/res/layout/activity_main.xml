@@ -4,6 +4,7 @@
         <variable name="viewModel" type="foundation.algorand.demo.MainViewModel"/>
     </data>
 <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/mainLayout"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         tools:context="foundation.algorand.demo.MainActivity">
@@ -79,6 +80,16 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:id="@+id/authenticateButton"
+            android:visibility="invisible"
+            app:layout_constraintBottom_toTopOf="@+id/disconnectButton"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+    />
+    <Button
+            android:text="Signal"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:id="@+id/signalButton"
             android:visibility="invisible"
             app:layout_constraintBottom_toTopOf="@+id/disconnectButton"
             app:layout_constraintStart_toStartOf="parent"
