@@ -1,11 +1,13 @@
 package foundation.algorand.demo
 
+import android.widget.Toast
+import androidx.biometric.BiometricPrompt
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import com.algorand.algosdk.account.Account
 import com.google.android.gms.fido.fido2.api.common.PublicKeyCredential
-import foundation.algorand.auth.verify.Message
+import foundation.algorand.auth.connect.Message
 
 /**
  * Demo View Model

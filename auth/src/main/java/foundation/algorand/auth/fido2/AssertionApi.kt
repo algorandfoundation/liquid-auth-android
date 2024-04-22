@@ -3,6 +3,7 @@ package foundation.algorand.auth.fido2
 import com.google.android.gms.fido.fido2.api.common.AuthenticatorAssertionResponse
 import com.google.android.gms.fido.fido2.api.common.PublicKeyCredential
 import com.google.android.gms.fido.fido2.api.common.PublicKeyCredentialType
+import foundation.algorand.auth.crypto.toBase64
 import okhttp3.Call
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
@@ -19,7 +20,6 @@ class AssertionApi @Inject constructor(
     fun postAssertionOptions(
         origin: String,
         userAgent: String,
-        sessionId: String?,
         credentialId: String
     ): Call {
         val path = "$origin/assertion/request/$credentialId"
@@ -27,11 +27,6 @@ class AssertionApi @Inject constructor(
             .url(path)
             .method("POST", JSONObject().toString().toRequestBody("application/json".toMediaTypeOrNull()))
             .addHeader("User-Agent", userAgent)
-
-        if (sessionId != null) {
-            requestBuilder.addHeader("Cookie", sessionId)
-        }
-
         return client.newCall(
             requestBuilder.build()
         )
@@ -42,7 +37,6 @@ class AssertionApi @Inject constructor(
     fun postAssertionResult(
         origin: String,
         userAgent: String,
-        session: String,
         credential: PublicKeyCredential
     ): Call {
         val rawId = credential.rawId.toBase64()
@@ -63,7 +57,6 @@ class AssertionApi @Inject constructor(
         val builder = Request.Builder()
             .url("$origin/assertion/response")
             .addHeader("User-Agent", userAgent)
-            .addHeader("Cookie", session)
             .method("POST", payload.toString().toRequestBody("application/json".toMediaTypeOrNull()))
 
        return client.newCall(

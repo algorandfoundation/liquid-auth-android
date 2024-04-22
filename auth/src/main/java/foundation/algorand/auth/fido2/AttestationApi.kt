@@ -3,6 +3,7 @@ package foundation.algorand.auth.fido2
 import com.google.android.gms.fido.fido2.api.common.AuthenticatorAttestationResponse
 import com.google.android.gms.fido.fido2.api.common.PublicKeyCredential
 import com.google.android.gms.fido.fido2.api.common.PublicKeyCredentialType
+import foundation.algorand.auth.crypto.toBase64
 import okhttp3.Call
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
@@ -43,7 +44,6 @@ class AttestationApi @Inject constructor(
     fun postAttestationOptions(
         origin: String,
         userAgent: String,
-        session: String,
         options: JSONObject = JSONObject()
     ): Call {
         val path = "$origin/attestation/request"
@@ -52,7 +52,6 @@ class AttestationApi @Inject constructor(
             Request.Builder()
                 .url(path)
                 .addHeader("User-Agent", userAgent)
-                .addHeader("Cookie", session)
                 .method("POST", body)
                 .build()
         )
@@ -69,7 +68,6 @@ class AttestationApi @Inject constructor(
     fun postAttestationResult(
         origin: String,
         userAgent: String,
-        session: String,
         credential: PublicKeyCredential,
     ): Call {
         val path = "$origin/attestation/response"
@@ -86,12 +84,12 @@ class AttestationApi @Inject constructor(
         jsonResponse.put("attestationObject", response.attestationObject.toBase64())
         payload.put("response", jsonResponse)
 
+        payload.put("device", android.os.Build.MODEL)
         val requestBody = payload.toString().toRequestBody("application/json".toMediaTypeOrNull())
         return client.newCall(
             Request.Builder()
                 .url(path)
                 .addHeader("User-Agent", userAgent)
-                .addHeader("Cookie", session)
                 .method("POST", requestBody)
                 .build()
         )

@@ -1,4 +1,4 @@
-package foundation.algorand.auth.fido2
+package foundation.algorand.auth.crypto
 
 import android.util.Base64
 
