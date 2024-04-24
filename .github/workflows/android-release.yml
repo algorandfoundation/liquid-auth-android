@@ -1,0 +1,43 @@
+name: Android - Demo App Tagged Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+jobs:
+  build:
+    permissions:
+      contents: write
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "The job was automatically triggered by a ${{ github.event_name }} event."
+      - uses: actions/checkout@v3
+      - name: set up JDK 17
+        uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+      - name: Setup Gradle
+        uses: gradle/gradle-build-action@v2
+      - name: Build with Gradle
+        run: ./gradlew build
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Debug Release ${{ github.ref }}
+          prerelease: true
+      - name: Upload Debug APK
+        id: upload_release_asset
+        uses: actions/upload-release-asset@v1.0.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: './app/build/outputs/apk/debug/app-debug.apk'
+          asset_name: fido2-debug.apk
+          asset_content_type: application/vnd.android.package-archive
