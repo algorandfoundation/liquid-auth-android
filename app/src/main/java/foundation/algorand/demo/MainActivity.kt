@@ -223,6 +223,10 @@ class MainActivity : AppCompatActivity() {
         options.put("username", account.address.toString())
         options.put("displayName",  "Liquid Auth User")
         options.put("authenticatorSelection", JSONObject().put("userVerification", "required"))
+        val extensions = JSONObject()
+        extensions.put("liquid", true)
+        options.put("extensions", extensions)
+
         // FIDO2 Server API Response for PublicKeyCredentialCreationOptions
         val response = attestationApi.postAttestationOptions(msg.origin, userAgent, options).await()
         val session = Cookie.fromResponse(response)
@@ -326,6 +330,10 @@ class MainActivity : AppCompatActivity() {
             userAgent,
             credential.id
         ).await()
+        val session = Cookie.fromResponse(response)
+        session?.let {
+            setSession(Cookie.getID(it))
+        }
         val publicKeyCredentialRequestOptions = response.body!!.toPublicKeyCredentialRequestOptions()
         val pendingIntent = fido2Client!!.getSignPendingIntent(publicKeyCredentialRequestOptions).await()
         assertionIntentLauncher.launch(IntentSenderRequest.Builder(pendingIntent).build())
@@ -380,13 +388,24 @@ class MainActivity : AppCompatActivity() {
                         } else {
                             viewModel.setCount(0)
                         }
-                        val credMessage = JSONObject()
-                        credMessage.put("device", android.os.Build.MODEL)
-                        credMessage.put("origin", viewModel.message.value!!.origin)
-                        credMessage.put("id", credential.id)
-                        credMessage.put("prevCounter", viewModel.count.value!!)
-                        credMessage.put("type", "credential")
-                        connectApi.peerApi!!.send(credMessage.toString())
+                        val msg = viewModel.message.value!!
+                        val keyPair = KeyPairs.getKeyPair(viewModel.account.value!!.toMnemonic())
+                        // Connect to the service then handle state changes and messages
+                        connectApi.connect(application, msg, {
+                            Log.d(TAG, "onStateChange($it)")
+                            if(it === "OPEN"){
+                                Log.d(TAG, "Sending Credential")
+                                val credMessage = JSONObject()
+                                credMessage.put("device", android.os.Build.MODEL)
+                                credMessage.put("origin", msg.origin)
+                                credMessage.put("id", credential.id)
+                                credMessage.put("prevCounter", viewModel.count.value!!)
+                                credMessage.put("type", "credential")
+                                connectApi.peerApi!!.send(credMessage.toString())
+                            }
+                        }) {
+                            handleMessages(msg, it, keyPair)
+                        }
                     }
                 }
             }
