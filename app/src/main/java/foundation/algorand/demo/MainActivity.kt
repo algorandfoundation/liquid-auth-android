@@ -27,9 +27,10 @@ import com.google.mlkit.vision.codescanner.GmsBarcodeScanner
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 import foundation.algorand.auth.Cookie
 import foundation.algorand.auth.connect.ConnectApi
-import foundation.algorand.auth.connect.Message
+import foundation.algorand.auth.connect.AuthMessage
 import foundation.algorand.auth.crypto.KeyPairs
 import foundation.algorand.auth.crypto.decodeBase64
+import foundation.algorand.auth.crypto.toBase64
 import foundation.algorand.auth.fido2.*
 import foundation.algorand.demo.databinding.ActivityMainBinding
 import kotlinx.coroutines.launch
@@ -39,6 +40,7 @@ import org.apache.commons.codec.binary.Base64
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.json.JSONArray
 import org.json.JSONObject
+import org.webrtc.DataChannel
 import ru.gildor.coroutines.okhttp.await
 import java.io.IOException
 import java.security.KeyPair
@@ -76,6 +78,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var biometricPrompt: BiometricPrompt
     private lateinit var promptInfo: BiometricPrompt.PromptInfo
     private lateinit var executor: Executor
+    private var signature: ByteArray? = null
 
     // Register/Attestation Intent Launcher
     private val attestationIntentLauncher = registerForActivityResult(
@@ -112,36 +115,6 @@ class MainActivity : AppCompatActivity() {
             connect()
 
         }
-        binding.registerButton.setOnClickListener {
-            lifecycleScope.launch {
-                register(viewModel.message.value!!)
-            }
-        }
-        binding.authenticateButton.setOnClickListener {
-            lifecycleScope.launch {
-                authenticate()
-            }
-        }
-//        viewModel.message.observe(this) {
-//            binding.signalButton.visibility = if (it === null) View.INVISIBLE else View.VISIBLE
-//        }
-        binding.signalButton.setOnClickListener {
-            connectApi.signal(application, viewModel.message.value!!, {
-                Log.d(TAG, "onStateChange($it)")
-            }) {
-                handleMessages(viewModel.message.value!!, it, KeyPairs.getKeyPair(viewModel.account.value!!.toMnemonic()))
-            }
-            val response = JSONObject()
-            response.put("device", android.os.Build.MODEL)
-            response.put("origin", viewModel.message.value!!.origin)
-            viewModel.credential.value?.let {
-                response.put("credId", it.id)
-            }
-            response.put("type", "signal")
-            connectApi.peerApi?.send(response.toString())
-
-        }
-
 
         binding.disconnectButton.setOnClickListener {
             cookieJar.clear()
@@ -150,7 +123,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    suspend fun biometrics(msg: Message, txn: Transaction):BiometricPrompt.AuthenticationResult? {
+    suspend fun biometrics(msg: AuthMessage, txn: Transaction):BiometricPrompt.AuthenticationResult? {
         return suspendCoroutine { continuation ->
             biometricPrompt = BiometricPrompt(this, executor,
                 object : BiometricPrompt.AuthenticationCallback() {
@@ -182,7 +155,7 @@ class MainActivity : AppCompatActivity() {
     private fun decodeUnsignedTransaction(unsignedTxn: String): Transaction? {
        return  Encoder.decodeFromMsgPack(unsignedTxn.decodeBase64(), Transaction::class.java)
     }
-    private fun handleMessages(authMessage: Message, msgStr: String, keyPair: KeyPair){
+    private fun handleMessages(authMessage: AuthMessage, msgStr: String, keyPair: KeyPair){
         // DataChannel Message Callback
         val message = JSONObject(msgStr)
         if(message.get("type") == "transaction") {
@@ -217,28 +190,15 @@ class MainActivity : AppCompatActivity() {
         scanner.startScan()
             .addOnSuccessListener { barcode ->
                 // Decode Barcode Message
-                val msg = Message.fromBarcode(barcode)
-                // Add wallet to Message
-                msg.wallet = account.address.toString()
-
-                // Optionally sign the message directly with a PrivateKey
-                // val signer = Signature.getInstance("EdDSA")
-                // signer.initSign(key)
-                // signer.update(bytes)
-                // msg.signature = signer.sign()
-
+                val msg = AuthMessage.fromBarcode(barcode)
+                viewModel.setMessage(msg)
                 // Connect to Service
                 lifecycleScope.launch {
-                    val keyPair = KeyPairs.getKeyPair(account.toMnemonic())
-                    // Connect to the service and if the message is unsigned, pass in a keypair
-                    val session = connectApi.connect(application, msg, keyPair, {
-                        Log.d(TAG, "onStateChange($it)")
-                    }) {
-                        handleMessages(msg, it, keyPair)
+                    if(viewModel.credential.value === null){
+                        register(msg)
+                    } else {
+                        authenticate(msg, viewModel.credential.value!!)
                     }
-                    // Update Render
-                    viewModel.setMessage(msg)
-                    setSession(session?.let { Cookie.getID(it) })
                 }
             }
             .addOnCanceledListener {
@@ -255,11 +215,28 @@ class MainActivity : AppCompatActivity() {
      * Receives PublicKeyCredentialCreationOptions from the FIDO2 Server and launches
      * the authenticator Intent using the handleAuthenticatorAttestationResult Handler
      */
-    private suspend fun register(msg: Message, options: JSONObject = JSONObject()) {
+    private suspend fun register(msg: AuthMessage, options: JSONObject = JSONObject()) {
+        val account = viewModel.account.value!!
+        Log.d(TAG, "Registering new Credential with ${account.address} at ${msg.origin}")
+
+        // Create Options for FIDO2 Server
+        options.put("username", account.address.toString())
+        options.put("displayName",  "Liquid Auth User")
+        options.put("authenticatorSelection", JSONObject().put("userVerification", "required"))
+        val extensions = JSONObject()
+        extensions.put("liquid", true)
+        options.put("extensions", extensions)
+
         // FIDO2 Server API Response for PublicKeyCredentialCreationOptions
         val response = attestationApi.postAttestationOptions(msg.origin, userAgent, options).await()
+        val session = Cookie.fromResponse(response)
+        session?.let {
+            setSession(Cookie.getID(it))
+        }
         // Convert ResponseBody to FIDO2 PublicKeyCredentialCreationOptions
         val pubKeyCredentialCreationOptions = response.body!!.toPublicKeyCredentialCreationOptions()
+        // Sign the challenge with the algorand account, this is used in the liquid FIDO2 extension
+        signature = KeyPairs.rawSignBytes(pubKeyCredentialCreationOptions.challenge, KeyPairs.getKeyPair(account.toMnemonic()).private)
         // Kick off FIDO2 Client Intent
         val pendingIntent = fido2Client!!.getRegisterPendingIntent(pubKeyCredentialCreationOptions).await()
         attestationIntentLauncher.launch(
@@ -275,6 +252,7 @@ class MainActivity : AppCompatActivity() {
      */
     private fun handleAuthenticatorAttestationResult(activityResult: ActivityResult) {
         val bytes = activityResult.data?.getByteArrayExtra(Fido.FIDO2_KEY_CREDENTIAL_EXTRA)
+
         when {
             activityResult.resultCode != Activity.RESULT_OK ->
                 Toast.makeText(this@MainActivity, "Canceled", Toast.LENGTH_LONG).show()
@@ -291,26 +269,48 @@ class MainActivity : AppCompatActivity() {
                     Toast.makeText(this@MainActivity, response.errorMessage, Toast.LENGTH_LONG)
                         .show()
                 } else {
-                    //
+                    if (signature === null) {
+                        Toast.makeText(this@MainActivity, "Signature is null", Toast.LENGTH_LONG).show()
+                        return
+                    }
+                    val msg = viewModel.message.value!!
+                    val account = viewModel.account.value!!
+                    val liquidExtJSON = JSONObject()
+                    liquidExtJSON.put("type", "algorand")
+                    liquidExtJSON.put("requestId", msg.requestId)
+                    liquidExtJSON.put("address", account.address.toString() )
+                    liquidExtJSON.put("signature", Base64.encodeBase64URLSafeString(signature!!))
+                    liquidExtJSON.put("device", android.os.Build.MODEL)
                     lifecycleScope.launch {
                         // POST Authenticator Results to FIDO2 API
-                        attestationApi.postAttestationResult(
-                            viewModel.message.value!!.origin,
+                       attestationApi.postAttestationResult(
+                            msg.origin,
                             userAgent,
-                            credential
+                            credential,
+                            liquidExtJSON
                         ).await()
 
+                        // Create P2P Channel
+                        val keyPair = KeyPairs.getKeyPair(account.toMnemonic())
+                        // Connect to the service and if the message is unsigned, pass in a keypair
+                        connectApi.connect(application, msg, {
+                            Log.d(TAG, "onStateChange($it)")
+                            if(it === "OPEN"){
+                                Log.d(TAG, "Sending Credential")
+                                val credMessage = JSONObject()
+                                credMessage.put("device", android.os.Build.MODEL)
+                                credMessage.put("origin", msg.origin)
+                                credMessage.put("id", credential.id)
+                                credMessage.put("prevCounter", 0)
+                                credMessage.put("type", "credential")
+                                connectApi.peerApi!!.send(credMessage.toString())
+                            }
+                        }) {
+                            handleMessages(msg, it, keyPair)
+                        }
                         // Update Render/State
                         viewModel.setCredential(credential)
                         Toast.makeText(this@MainActivity, "Registered Credentials!", Toast.LENGTH_LONG).show()
-
-                        val credMessage = JSONObject()
-                        credMessage.put("device", android.os.Build.MODEL)
-                        credMessage.put("origin", viewModel.message.value!!.origin)
-                        credMessage.put("id", credential.id)
-                        credMessage.put("prevCounter", 0)
-                        credMessage.put("type", "credential")
-                        connectApi.peerApi!!.send(credMessage.toString())
                     }
 
                 }
@@ -324,12 +324,16 @@ class MainActivity : AppCompatActivity() {
      * Receives PublicKeyCredentialRequestOptions from the FIDO2 Server and launches
      * the authenticator Intent using the handleAuthenticatorAssertionResult Handler
      */
-    private suspend fun authenticate() {
+    private suspend fun authenticate(msg: AuthMessage, credential: PublicKeyCredential) {
         val response = assertionApi.postAssertionOptions(
-            viewModel.message.value!!.origin,
+            msg.origin,
             userAgent,
-            viewModel.credential.value!!.id
+            credential.id
         ).await()
+        val session = Cookie.fromResponse(response)
+        session?.let {
+            setSession(Cookie.getID(it))
+        }
         val publicKeyCredentialRequestOptions = response.body!!.toPublicKeyCredentialRequestOptions()
         val pendingIntent = fido2Client!!.getSignPendingIntent(publicKeyCredentialRequestOptions).await()
         assertionIntentLauncher.launch(IntentSenderRequest.Builder(pendingIntent).build())
@@ -359,11 +363,14 @@ class MainActivity : AppCompatActivity() {
                         .show()
                 } else {
                     lifecycleScope.launch {
+                        val liquidExtJSON = JSONObject()
+                        liquidExtJSON.put("requestId", viewModel.message.value!!.requestId)
                         // POST Authenticator Results to FIDO2 API
                         val response = assertionApi.postAssertionResult(
                             viewModel.message.value!!.origin,
                             userAgent,
-                            credential
+                            credential,
+                            liquidExtJSON
                         ).await()
 
                         // Update Render/State
@@ -381,13 +388,24 @@ class MainActivity : AppCompatActivity() {
                         } else {
                             viewModel.setCount(0)
                         }
-                        val credMessage = JSONObject()
-                        credMessage.put("device", android.os.Build.MODEL)
-                        credMessage.put("origin", viewModel.message.value!!.origin)
-                        credMessage.put("id", credential.id)
-                        credMessage.put("prevCounter", viewModel.count.value!!)
-                        credMessage.put("type", "credential")
-                        connectApi.peerApi!!.send(credMessage.toString())
+                        val msg = viewModel.message.value!!
+                        val keyPair = KeyPairs.getKeyPair(viewModel.account.value!!.toMnemonic())
+                        // Connect to the service then handle state changes and messages
+                        connectApi.connect(application, msg, {
+                            Log.d(TAG, "onStateChange($it)")
+                            if(it === "OPEN"){
+                                Log.d(TAG, "Sending Credential")
+                                val credMessage = JSONObject()
+                                credMessage.put("device", android.os.Build.MODEL)
+                                credMessage.put("origin", msg.origin)
+                                credMessage.put("id", credential.id)
+                                credMessage.put("prevCounter", viewModel.count.value!!)
+                                credMessage.put("type", "credential")
+                                connectApi.peerApi!!.send(credMessage.toString())
+                            }
+                        }) {
+                            handleMessages(msg, it, keyPair)
+                        }
                     }
                 }
             }
@@ -402,14 +420,10 @@ class MainActivity : AppCompatActivity() {
         if (s === null) {
             viewModel.setSession("Logged Out")
             viewModel.setMessage(null)
-            binding.registerButton.visibility = View.INVISIBLE
-            binding.authenticateButton.visibility = View.INVISIBLE
             binding.disconnectButton.visibility = View.INVISIBLE
             binding.connectButton.visibility = View.VISIBLE
         } else {
             viewModel.setSession(s)
-            binding.registerButton.visibility = View.VISIBLE
-            binding.authenticateButton.visibility = View.VISIBLE
             binding.disconnectButton.visibility = View.VISIBLE
             binding.connectButton.visibility = View.INVISIBLE
         }

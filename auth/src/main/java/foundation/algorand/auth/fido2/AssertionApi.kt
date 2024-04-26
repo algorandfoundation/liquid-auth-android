@@ -20,8 +20,13 @@ class AssertionApi @Inject constructor(
     fun postAssertionOptions(
         origin: String,
         userAgent: String,
-        credentialId: String
+        credentialId: String,
+        liquidExt: Boolean? = true
     ): Call {
+        val payload = JSONObject()
+        if(liquidExt == true) {
+            payload.put("extensions", liquidExt)
+        }
         val path = "$origin/assertion/request/$credentialId"
         val requestBuilder = Request.Builder()
             .url(path)
@@ -37,7 +42,8 @@ class AssertionApi @Inject constructor(
     fun postAssertionResult(
         origin: String,
         userAgent: String,
-        credential: PublicKeyCredential
+        credential: PublicKeyCredential,
+        liquidExt: JSONObject?
     ): Call {
         val rawId = credential.rawId.toBase64()
         val response = credential.response as AuthenticatorAssertionResponse
@@ -46,7 +52,11 @@ class AssertionApi @Inject constructor(
         payload.put("id", rawId)
         payload.put("type", "${PublicKeyCredentialType.PUBLIC_KEY}")
         payload.put("rawId", rawId)
-
+        if(liquidExt != null) {
+            val clientExtensionResults = JSONObject()
+            clientExtensionResults.put("liquid", liquidExt)
+            payload.put("clientExtensionResults", clientExtensionResults)
+        }
         val jsonResponse = JSONObject()
         jsonResponse.put("clientDataJSON", response.clientDataJSON.toBase64())
         jsonResponse.put("authenticatorData", response.authenticatorData.toBase64())

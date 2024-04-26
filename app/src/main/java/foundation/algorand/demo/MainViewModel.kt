@@ -7,7 +7,7 @@ import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import com.algorand.algosdk.account.Account
 import com.google.android.gms.fido.fido2.api.common.PublicKeyCredential
-import foundation.algorand.auth.connect.Message
+import foundation.algorand.auth.connect.AuthMessage
 
 /**
  * Demo View Model
@@ -32,13 +32,13 @@ class MainViewModel: ViewModel() {
         }
     }
 
-    private val _message = MutableLiveData<Message?>().apply {
+    private val _message = MutableLiveData<AuthMessage?>().apply {
         value = null
     }
 
-    val message: LiveData<Message?> = _message
+    val message: LiveData<AuthMessage?> = _message
 
-    fun setMessage(msg: Message?){
+    fun setMessage(msg: AuthMessage?){
         _message.value = msg
     }
 

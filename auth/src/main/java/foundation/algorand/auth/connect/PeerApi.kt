@@ -189,12 +189,17 @@ class PeerApi(context: Context) {
         if(dataChannel === null){
             throw Exception("dataChannel is null")
         }
+        dataChannel?.state()?.let {
+            if(it !== DataChannel.State.OPEN){
+                throw Exception("dataChannel is not open")
+            }
+        }
         val buffer = ByteBuffer.wrap(message.toByteArray())
         dataChannel?.send(DataChannel.Buffer(buffer, false))
     }
     fun destroy(){
         dataChannel?.close()
-        dataChannel?.dispose()
+//        dataChannel?.dispose()
         peerConnection?.close()
         peerConnection?.dispose()
         peerConnection = null

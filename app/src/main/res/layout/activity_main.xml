@@ -65,36 +65,6 @@
             app:layout_constraintEnd_toEndOf="parent"
 
     />
-
-    <Button
-            android:text="Register"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:id="@+id/registerButton"
-            android:visibility="invisible"
-            app:layout_constraintBottom_toTopOf="@+id/authenticateButton"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"/>
-    <Button
-            android:text="Authenticate"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:id="@+id/authenticateButton"
-            android:visibility="invisible"
-            app:layout_constraintBottom_toTopOf="@+id/disconnectButton"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
-    />
-    <Button
-            android:text="Signal"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:id="@+id/signalButton"
-            android:visibility="invisible"
-            app:layout_constraintBottom_toTopOf="@+id/disconnectButton"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
-    />
     <Button
             android:text="Disconnect"
             android:layout_width="wrap_content"

@@ -69,6 +69,7 @@ class AttestationApi @Inject constructor(
         origin: String,
         userAgent: String,
         credential: PublicKeyCredential,
+        liquidExt: JSONObject? = null
     ): Call {
         val path = "$origin/attestation/response"
         val rawId = credential.rawId.toBase64()
@@ -78,7 +79,11 @@ class AttestationApi @Inject constructor(
         payload.put("id", rawId)
         payload.put("type", "${PublicKeyCredentialType.PUBLIC_KEY}")
         payload.put("rawId", rawId)
-
+        if(liquidExt != null) {
+            val clientExtensionResults = JSONObject()
+            clientExtensionResults.put("liquid", liquidExt)
+            payload.put("clientExtensionResults", clientExtensionResults)
+        }
         val jsonResponse = JSONObject()
         jsonResponse.put("clientDataJSON", response.clientDataJSON.toBase64())
         jsonResponse.put("attestationObject", response.attestationObject.toBase64())
