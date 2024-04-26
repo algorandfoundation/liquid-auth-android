@@ -17,17 +17,20 @@ Install the Android demo app from the [releases page](https://github.com/algoran
 
 ## User Guide
 
+### Example Dapp
 ![Step-1.png](.docs%2FStep-1.png)
 
-#### Open the Connect Modal and scan the QR code using the "Connect" button on the Android device
+
+### QR Connect
+
+Open the Connect Modal on the website and scan the QR code using the "Connect" button on the Android device.
+Follow the instructions on the Android device to register a credential.
+
 
 ![Step-1-QRCode.png](.docs%2FStep-1-QRCode.png)
 
-#### Register a credential on the Android device
 
-Follow the instructions on the Android device to register a credential.
-
-#### Send messages over the Peer Connection
+### Peer to Peer
 
 Once the credential is registered, you can send messages over the peer connection.
 
