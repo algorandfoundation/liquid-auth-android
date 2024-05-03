@@ -9,9 +9,19 @@ This project has two main components:
 1. **foundation.algorand.auth**: A client library for the liquid-auth service
 2. **foundation.algorand.demo**: A demo application that uses the client library
 
-# Getting Started
+# Quick Start
 
-Install the Android demo app from the [releases page](https://github.com/algorandfoundation/liquid-auth-android/releases)
+This app is a simple android application that demonstrates the use of the liquid-auth service. It allows users to authenticate with the service and create peer connections.
+
+### Installation
+
+#### Prebuild APK
+
+1. Download the [latest release](https://github.com/algorandfoundation/liquid-auth-android/releases/download/v0.2.0/fido2-debug.apk) on an Android device
+2. You may need to [enable permissions](https://www.androidauthority.com/how-to-install-apks-31494/) to install the app
+
+
+### Liquid Auth Service
 
 [Start a demo liquid-auth](https://github.com/algorandfoundation/liquid-auth?tab=readme-ov-file#getting-started) application or navigate to the liquid-auth enabled service in your browser to test the FIDO2 feature.
 
@@ -37,3 +47,13 @@ Once the credential is registered, you can send messages over the peer connectio
 ![Step-2.png](.docs%2FStep-2.png)
 
 
+# Building
+
+Clone the repository and open in Android Studio
+```bash
+git clone git@github.com:algorandfoundation/liquid-auth-android.git
+```
+
+Connect a device and run the `app` target on a device, it is recommended to use a physical device for testing.
+
+Make sure to also [start the liquid-auth service](https://github.com/algorandfoundation/liquid-auth?tab=readme-ov-file#getting-started) on your local machine or a remote server.
