@@ -2,25 +2,16 @@ package foundation.algorand.auth.connect
 
 import android.content.Context
 import android.util.Log
-import foundation.algorand.auth.Cookie
-import foundation.algorand.auth.crypto.KeyPairs
-import foundation.algorand.auth.crypto.decodeBase64
 import io.socket.client.IO
 import io.socket.client.Socket
 import okhttp3.Call
-import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
-import org.apache.commons.codec.binary.Base64
 import org.json.JSONObject
 import org.webrtc.*
-import ru.gildor.coroutines.okhttp.await
-import java.nio.charset.StandardCharsets
-import java.security.KeyPair
 import javax.inject.Inject
 
-class ConnectApi @Inject constructor(
+class SignalClient @Inject constructor(
     private val client: OkHttpClient,
 ) {
     companion object {

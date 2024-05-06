@@ -15,8 +15,6 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
-import com.algorand.algosdk.kmd.client.model.SignTransactionRequest
-import com.algorand.algosdk.transaction.SignedTransaction
 import com.algorand.algosdk.transaction.Transaction
 import com.algorand.algosdk.util.Encoder
 import com.google.android.gms.fido.Fido
@@ -26,11 +24,10 @@ import com.google.android.gms.fido.fido2.api.common.PublicKeyCredential
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanner
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 import foundation.algorand.auth.Cookie
-import foundation.algorand.auth.connect.ConnectApi
+import foundation.algorand.auth.connect.SignalClient
 import foundation.algorand.auth.connect.AuthMessage
 import foundation.algorand.auth.crypto.KeyPairs
 import foundation.algorand.auth.crypto.decodeBase64
-import foundation.algorand.auth.crypto.toBase64
 import foundation.algorand.auth.fido2.*
 import foundation.algorand.demo.databinding.ActivityMainBinding
 import kotlinx.coroutines.launch
@@ -40,9 +37,7 @@ import org.apache.commons.codec.binary.Base64
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.json.JSONArray
 import org.json.JSONObject
-import org.webrtc.DataChannel
 import ru.gildor.coroutines.okhttp.await
-import java.io.IOException
 import java.security.KeyPair
 import java.security.Security
 import java.util.concurrent.Executor
@@ -68,7 +63,7 @@ class MainActivity : AppCompatActivity() {
 
     // FIDO/Auth interfaces
     private var fido2Client: Fido2ApiClient? = null
-    private val connectApi = ConnectApi(httpClient)
+    private val signalClient = SignalClient(httpClient)
     private val attestationApi = AttestationApi(httpClient)
     private val assertionApi = AssertionApi(httpClient)
 
@@ -119,7 +114,7 @@ class MainActivity : AppCompatActivity() {
         binding.disconnectButton.setOnClickListener {
             cookieJar.clear()
             setSession(null)
-            connectApi.disconnect()
+            signalClient.disconnect()
         }
     }
 
@@ -173,7 +168,7 @@ class MainActivity : AppCompatActivity() {
                     responseObj.put("txId", txn.txID())
                     responseObj.put("type", "transaction-signature")
                     Log.d(TAG, "Sending: ${responseObj.toString()}")
-                    connectApi.peerApi?.send(responseObj.toString())
+                    signalClient.peerApi?.send(responseObj.toString())
                 }
             }
         }
@@ -293,7 +288,7 @@ class MainActivity : AppCompatActivity() {
                         // Create P2P Channel
                         val keyPair = KeyPairs.getKeyPair(account.toMnemonic())
                         // Connect to the service and if the message is unsigned, pass in a keypair
-                        connectApi.connect(application, msg, {
+                        signalClient.connect(application, msg, {
                             Log.d(TAG, "onStateChange($it)")
                             if(it === "OPEN"){
                                 Log.d(TAG, "Sending Credential")
@@ -303,7 +298,7 @@ class MainActivity : AppCompatActivity() {
                                 credMessage.put("id", credential.id)
                                 credMessage.put("prevCounter", 0)
                                 credMessage.put("type", "credential")
-                                connectApi.peerApi!!.send(credMessage.toString())
+                                signalClient.peerApi!!.send(credMessage.toString())
                             }
                         }) {
                             handleMessages(msg, it, keyPair)
@@ -391,7 +386,7 @@ class MainActivity : AppCompatActivity() {
                         val msg = viewModel.message.value!!
                         val keyPair = KeyPairs.getKeyPair(viewModel.account.value!!.toMnemonic())
                         // Connect to the service then handle state changes and messages
-                        connectApi.connect(application, msg, {
+                        signalClient.connect(application, msg, {
                             Log.d(TAG, "onStateChange($it)")
                             if(it === "OPEN"){
                                 Log.d(TAG, "Sending Credential")
@@ -401,7 +396,7 @@ class MainActivity : AppCompatActivity() {
                                 credMessage.put("id", credential.id)
                                 credMessage.put("prevCounter", viewModel.count.value!!)
                                 credMessage.put("type", "credential")
-                                connectApi.peerApi!!.send(credMessage.toString())
+                                signalClient.peerApi!!.send(credMessage.toString())
                             }
                         }) {
                             handleMessages(msg, it, keyPair)
