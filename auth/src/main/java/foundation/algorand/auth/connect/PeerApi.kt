@@ -4,20 +4,26 @@ import android.content.Context
 import android.util.Log
 import org.webrtc.*
 import java.nio.ByteBuffer
+import kotlin.coroutines.resume
+import kotlin.coroutines.suspendCoroutine
 
 class PeerApi(context: Context) {
     companion object {
         const val TAG = "connect.PeerApi"
     }
+
     // Data Channel to send and receive messages
     private var dataChannel: DataChannel? = null
 
-    private lateinit var peerConnectionFactory: PeerConnectionFactory
+    // Create the Peer Connection Factory
+    private var peerConnectionFactory: PeerConnectionFactory
+
     init {
         PeerConnectionFactory.initialize(
             PeerConnectionFactory.InitializationOptions.builder(context)
-            .setEnableInternalTracer(true)
-            .createInitializationOptions())
+                .setEnableInternalTracer(true)
+                .createInitializationOptions()
+        )
         peerConnectionFactory = PeerConnectionFactory
             .builder()
             .setOptions(PeerConnectionFactory.Options().apply {
@@ -26,18 +32,25 @@ class PeerApi(context: Context) {
             })
             .createPeerConnectionFactory()
     }
-    // Create the Peer Connection Factory
 
+    // Current Peer Connection
+    var peerConnection: PeerConnection? = null
 
-    private var peerConnection: PeerConnection? = null
-
-    fun createPeerConnection(onIceCandidate: (IceCandidate) -> Unit, iceServers: List<PeerConnection.IceServer>? = listOf(
-        PeerConnection.IceServer.builder("stun:stun.l.google.com:19302")
-            .createIceServer()
-    )){
-        if(peerConnection !== null){
+    /**
+     * Create a new Peer Connection
+     */
+    fun createPeerConnection(
+        onIceCandidate: (IceCandidate) -> Unit,
+        onDataChannel: (DataChannel) -> Unit,
+        iceServers: List<PeerConnection.IceServer>? = listOf(
+            PeerConnection.IceServer.builder("stun:stun.l.google.com:19302")
+                .createIceServer()
+        )
+    ) {
+        if (peerConnection !== null) {
             peerConnection?.close()
         }
+
         peerConnection = peerConnectionFactory.createPeerConnection(
             iceServers,
             object : PeerConnection.Observer {
@@ -49,10 +62,15 @@ class PeerApi(context: Context) {
 
                 override fun onDataChannel(p0: DataChannel?) {
                     Log.d(TAG, "onDataChannel($p0)")
+                    dataChannel = p0
+                    onDataChannel(p0!!)
                 }
 
                 override fun onIceConnectionChange(p0: PeerConnection.IceConnectionState?) {
                     Log.d(TAG, "onIceConnectionChange($p0)")
+                    if (p0 === PeerConnection.IceConnectionState.FAILED) {
+                        Log.e(TAG, "ICE Connection Failed")
+                    }
                 }
 
                 override fun onIceConnectionReceivingChange(p0: Boolean) {
@@ -89,115 +107,181 @@ class PeerApi(context: Context) {
             }
         )
     }
-    fun addIceCandidate(candidate: IceCandidate){
-        if(peerConnection === null){
+    suspend fun createPeerConnection(onIceCandidate: (IceCandidate) -> kotlin.Unit, iceServers: List<PeerConnection.IceServer>? = listOf(
+        PeerConnection.IceServer.builder("stun:stun.l.google.com:19302")
+            .createIceServer()) ): DataChannel {
+        return suspendCoroutine { continuation ->
+            createPeerConnection(onIceCandidate,{
+                continuation.resume(it)
+            },iceServers)
+        }
+    }
+    /**
+     * Add an ICE Candidate
+     */
+    fun addIceCandidate(candidate: IceCandidate) {
+        if (peerConnection === null) {
             throw Exception("peerConnection is null, ensure you are connected")
         }
         peerConnection?.addIceCandidate(candidate)
     }
-    fun setRemoteDescription(description: SessionDescription){
-        if(peerConnection === null){
+    fun setLocalDescription(description: SessionDescription, onSessionDescription: (SessionDescription?) -> Unit) {
+        if (peerConnection === null) {
             throw Exception("peerConnection is null, ensure you are connected")
         }
+        peerConnection?.setLocalDescription(createSDPObserver(onSessionDescription), description)
+    }
+    /**
+     * Set the Remote Description
+     *
+     * Handles Remote Description with a Callback Function
+     */
+    fun setRemoteDescription(description: SessionDescription, onSessionDescription: (SessionDescription?) -> Unit) {
+        if (peerConnection === null) {
+            throw Exception("peerConnection is null, ensure you are connected")
+        }
+        peerConnection?.setRemoteDescription(createSDPObserver(onSessionDescription), description)
+    }
 
-        peerConnection?.setRemoteDescription(object : SdpObserver {
+    /**
+     * Set the Remote Description
+     *
+     * Handles Remote Description using Coroutines
+     */
+    suspend fun setRemoteDescription(description: SessionDescription): SessionDescription? {
+        return suspendCoroutine { continuation ->
+            setRemoteDescription(description) { sessionDescription ->
+                continuation.resume(sessionDescription)
+            }
+        }
+    }
+
+    /**
+     * Create an SDP Observer
+     *
+     * Used for Local and Remote Description handling
+     */
+    private fun createSDPObserver(onSessionDescription: (SessionDescription?) -> Unit): SdpObserver {
+        return object : SdpObserver {
             override fun onSetFailure(p0: String?) {
                 Log.e(TAG, "onSetFailure: $p0")
             }
 
             override fun onSetSuccess() {
-                Log.e(TAG, "onSetSuccessRemoteSession")
+                Log.d(TAG, "onSetSuccess")
+                onSessionDescription(peerConnection?.localDescription)
             }
 
             override fun onCreateSuccess(p0: SessionDescription?) {
                 Log.e(TAG, "onCreateSuccess")
+                onSessionDescription(p0)
             }
 
             override fun onCreateFailure(p0: String?) {
                 Log.e(TAG, "onCreateFailure: $p0")
+                onSessionDescription(null)
+
             }
-        }, description)
+        }
     }
-    fun createOffer(callback: (SessionDescription?) -> Unit){
-        if(peerConnection === null){
+    fun createAnswer(onSessionDescription: (SessionDescription?) -> Unit) {
+        Log.d(TAG, "createAnswer")
+        if (peerConnection === null) {
             throw Exception("peerConnection is null")
         }
-        peerConnection?.createOffer(object : SdpObserver {
-            override fun onSetFailure(p0: String?) {
-                Log.e(TAG, "onSetFailure: $p0")
-            }
-
-            override fun onSetSuccess() {
-                Log.e(TAG, "onSetSuccess")
-            }
-
-            override fun onCreateSuccess(p0: SessionDescription?) {
-                Log.e(TAG, "onCreateSuccess")
-                peerConnection?.setLocalDescription(object : SdpObserver {
-                    override fun onSetFailure(p0: String?) {
-                        Log.e(TAG, "onSetFailure: $p0")
-                    }
-
-                    override fun onSetSuccess() {
-                        Log.e(TAG, "onSetSuccess")
-                        callback(p0)
-                    }
-
-                    override fun onCreateSuccess(p0: SessionDescription?) {
-                        Log.e(TAG, "onCreateSuccess")
-                    }
-
-                    override fun onCreateFailure(p0: String?) {
-                        Log.e(TAG, "onCreateFailure: $p0")
-                    }
-                }, p0)
-            }
-
-            override fun onCreateFailure(p0: String?) {
-                Log.e(TAG, "onCreateFailure: $p0")
-            }
-        }, MediaConstraints())
+        peerConnection?.createAnswer(createSDPObserver(onSessionDescription), MediaConstraints())
     }
-    fun createDataChannel(label: String, onStateChange: (String)-> Unit, onMessage: (String) ->Unit ){
-        if(peerConnection === null){
+    suspend fun createAnswer(): SessionDescription? {
+        return suspendCoroutine { continuation ->
+            createAnswer { sessionDescription ->
+                continuation.resume(sessionDescription)
+            }
+        }
+    }
+    /**
+     * Create an Offer
+     *
+     * Handles Offer Creation with a Callback Function
+     */
+    fun createOffer(onSessionDescription: (SessionDescription?)->Unit) {
+        if (peerConnection === null) {
             throw Exception("peerConnection is null")
         }
-        dataChannel?.close()
-        dataChannel = peerConnection?.createDataChannel(label, DataChannel.Init())
-        dataChannel?.registerObserver(object : DataChannel.Observer {
+        peerConnection?.createOffer(createSDPObserver(onSessionDescription), MediaConstraints())
+    }
+
+    /**
+     * Create an Offer
+     *
+     * Handles Offer Creation using Coroutines
+     */
+    suspend fun createOffer(): SessionDescription? {
+        return suspendCoroutine { continuation ->
+            createOffer { sessionDescription ->
+                continuation.resume(sessionDescription)
+            }
+        }
+    }
+
+    fun createDataChannelObserver(
+        onMessage: (String) -> Unit,
+        onStateChange: ((String?) -> Unit)? = null,
+        onBufferedAmountChange: ((Long) -> Unit)? = null
+    ): DataChannel.Observer {
+        if (peerConnection === null) {
+            throw Exception("peerConnection is null")
+        }
+        return object : DataChannel.Observer {
             override fun onBufferedAmountChange(p0: Long) {
                 Log.d(TAG, "onBufferedAmountChange($p0)")
+                onBufferedAmountChange?.invoke(p0)
             }
 
             override fun onStateChange() {
                 Log.d(TAG, "onStateChange")
-                onStateChange(dataChannel?.state().toString())
+                onStateChange?.invoke(dataChannel?.state().toString())
             }
 
+            /**
+             * Handle DataChannel messages
+             *
+             * @todo: Implement Web Provider API messages
+             */
             override fun onMessage(p0: DataChannel.Buffer?) {
                 Log.d(TAG, "onMessage($p0)")
                 p0?.data?.let {
                     val bytes = ByteArray(it.remaining())
                     p0.data.get(bytes)
-                    val payload = String( bytes)
+                    val payload = String(bytes)
                     onMessage(payload)
                 }
             }
-        })
+        }
     }
-    fun send(message: String){
-        if(dataChannel === null){
+
+    fun createDataChannel(label: String): DataChannel? {
+        if (peerConnection === null) {
+            throw Exception("peerConnection is null")
+        }
+        dataChannel?.close()
+        dataChannel = peerConnection?.createDataChannel(label, DataChannel.Init())
+        return dataChannel
+    }
+
+    fun send(message: String) {
+        if (dataChannel === null) {
             throw Exception("dataChannel is null")
         }
         dataChannel?.state()?.let {
-            if(it !== DataChannel.State.OPEN){
+            if (it !== DataChannel.State.OPEN) {
                 throw Exception("dataChannel is not open")
             }
         }
         val buffer = ByteBuffer.wrap(message.toByteArray())
         dataChannel?.send(DataChannel.Buffer(buffer, false))
     }
-    fun destroy(){
+
+    fun destroy() {
         dataChannel?.close()
 //        dataChannel?.dispose()
         peerConnection?.close()
