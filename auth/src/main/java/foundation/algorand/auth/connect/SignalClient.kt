@@ -66,20 +66,16 @@ class SignalClient @Inject constructor(
      * Generate a QR Code
      */
     override fun qrCode(requestId: Double): Bitmap {
-        val data = JSONObject()
-        data.put("origin", url)
-        data.put("requestId", requestId)
-
-        val helloWorld = QRCode.ofSquares()
+        val data = "liquid://${url.replace("https://", "")}/?requestId=$requestId"
+        val image = QRCode.ofSquares()
             .withColor(Colors.DEEP_SKY_BLUE)
-            .build(data.toString())
+            .build(data)
             .render()
             .nativeImage()
-        if (helloWorld !is Bitmap) {
+        if (image !is Bitmap) {
             throw Exception("Invalid Type")
         }
-        return helloWorld
-
+        return image
     }
 
     /**
