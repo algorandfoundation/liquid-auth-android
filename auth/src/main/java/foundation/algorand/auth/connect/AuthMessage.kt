@@ -1,18 +1,18 @@
 package foundation.algorand.auth.connect
 
+import android.net.Uri
 import android.util.Log
 import com.google.mlkit.vision.barcode.common.Barcode
 import org.json.JSONObject
-import java.net.URI
 import javax.inject.Inject
 
-private fun URI.findParameterValue(parameterName: String): String? {
-    return query.split('&').map {
+private fun Uri.findParameterValue(parameterName: String): String? {
+    return query?.split('&')?.map {
         val parts = it.split('=')
         val name = parts.firstOrNull() ?: ""
         val value = parts.drop(1).firstOrNull() ?: ""
         Pair(name, value)
-    }.firstOrNull{it.first == parameterName}?.second
+    }?.firstOrNull{it.first == parameterName}?.second
 }
 class AuthMessage @Inject constructor(
     var origin: String,
@@ -21,6 +21,29 @@ class AuthMessage @Inject constructor(
 
     companion object {
         const val TAG = "connect.Message"
+        fun fromUri(uri: Uri): AuthMessage {
+            Log.d(TAG, "fromUri($uri)")
+            val origin = "https://${uri.host}"
+            val requestId = uri.findParameterValue("requestId")!!.toDouble()
+            return AuthMessage(origin, requestId)
+        }
+        /**
+         * Parse the Uri string
+         *
+         * `liquid://<ORIGIN>/?requestId=<REQUEST_ID>`
+         */
+        fun fromString(stringContents: String): AuthMessage {
+            Log.d(TAG, "fromString($stringContents)")
+            if(stringContents.startsWith("liquid://")) {
+               return fromUri(Uri.parse(stringContents))
+            } else {
+                // Fallback to JSON renderer
+                val json = JSONObject(stringContents)
+                val origin = json.get("origin").toString()
+                val requestId = json.get("requestId").toString().toDouble()
+                return AuthMessage(origin, requestId)
+            }
+        }
         /**
          * Parse the `Barcode`
          *
@@ -31,18 +54,7 @@ class AuthMessage @Inject constructor(
         fun fromBarcode(barcode: Barcode): AuthMessage {
             Log.d(TAG, "fromBarcode(${barcode.displayValue})")
             val stringContents = barcode.displayValue ?: throw Exception("Barcode does not contain a display value")
-            if(stringContents.startsWith("liquid://")) {
-                val uri = URI(stringContents)
-                val origin = "https://${uri.host}"
-                val requestId = uri.findParameterValue("requestId")!!.toDouble()
-                return AuthMessage(origin, requestId)
-            } else {
-                // Fallback to JSON renderer
-                val json = JSONObject(barcode.displayValue.toString())
-                val origin = json.get("origin").toString()
-                val requestId = json.get("requestId").toString().toDouble()
-                return AuthMessage(origin, requestId)
-            }
+            return fromString(stringContents)
         }
     }
     fun toJSON() : JSONObject {
