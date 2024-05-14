@@ -1,9 +1,15 @@
 <resources>
-    <string name="app_name">foundation.algorand.demo</string>
+    <string name="app_name">Liquid Auth Wallet</string>
     <string name="origin">Origin: %s</string>
     <string name="request">Request ID: %s</string>
     <string name="wallet">Wallet: %s</string>
     <string name="session">Session: %s</string>
     <string name="credential">Credential: %s</string>
     <string name="count">Login Count: %s</string>
+    <string name="element_text">Liquid Auth</string>
+    <string name="calling_app">Calling App: %s</string>
+    <string name="get_passkey_message">Handling Get Credential</string>
+    <string name="get_passkey_error">Failed to get Passkey</string>
+    <string name="create_passkey_message">Handling Create Credential</string>
+    <string name="create_passkey_error">Failed to create Passkey</string>
 </resources>
