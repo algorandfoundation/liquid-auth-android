@@ -1,6 +1,7 @@
 package foundation.algorand.demo
 
 import android.content.Intent
+import android.graphics.BitmapFactory
 import android.os.Bundle
 import android.util.Log
 import android.widget.Toast
@@ -39,7 +40,7 @@ class OfferActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val url = "https://catfish-pro-wolf.ngrok-free.app"
+        val url = "https://liquid-auth.onrender.com"
         val requestId = SignalClient.generateRequestId()
         signalClient = SignalClient(url, this@OfferActivity, httpClient)
         binding = ActivityOfferBinding.inflate(layoutInflater)
@@ -51,7 +52,7 @@ class OfferActivity : AppCompatActivity() {
             myIntent.setFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
             startActivity(myIntent)
         }
-        binding.qrCodeImageView.setImageBitmap(signalClient.qrCode(requestId))
+        binding.qrCodeImageView.setImageBitmap(signalClient.qrCode(requestId, BitmapFactory.decodeResource(getResources(), R.mipmap.ic_launcher_round)))
         viewModel.setMessage(AuthMessage(url, requestId))
         lifecycleScope.launch {
             val dc = signalClient.peer(requestId, "offer")

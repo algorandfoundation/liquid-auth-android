@@ -47,7 +47,7 @@ interface SignalInterface {
     /**
      * Generate a QR Code
      */
-    fun qrCode(requestId: Double): Bitmap
+    fun qrCode(requestId: Double, logo: Bitmap?, logoSize: Int? = null): Bitmap
 
     /**
      * Top Level Peer Connection

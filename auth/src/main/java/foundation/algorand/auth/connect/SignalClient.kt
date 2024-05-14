@@ -1,5 +1,6 @@
 package foundation.algorand.auth.connect
 
+import android.R.attr.bitmap
 import android.content.Context
 import android.graphics.Bitmap
 import android.util.Log
@@ -16,10 +17,12 @@ import org.webrtc.IceCandidate
 import org.webrtc.SessionDescription
 import qrcode.QRCode
 import qrcode.color.Colors
+import java.io.ByteArrayOutputStream
 import java.util.*
 import javax.inject.Inject
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
+
 
 /**
  * Signal Client
@@ -65,10 +68,16 @@ class SignalClient @Inject constructor(
     /**
      * Generate a QR Code
      */
-    override fun qrCode(requestId: Double): Bitmap {
+    override fun qrCode(requestId: Double, logo: Bitmap?, logoSize: Int?): Bitmap {
+        val size = logoSize ?: 200
+        val scaledLogo = logo?.let { Bitmap.createScaledBitmap(it, size, size, false) }
+        val stream = ByteArrayOutputStream()
+        scaledLogo?.compress(Bitmap.CompressFormat.PNG, 100, stream)
         val data = "liquid://${url.replace("https://", "")}/?requestId=$requestId"
         val image = QRCode.ofSquares()
-            .withColor(Colors.DEEP_SKY_BLUE)
+            .withColor(Colors.css("#9966FF"))
+            .withBackgroundColor(Colors.css("#15121B"))
+            .withLogo(stream.toByteArray(), size, size)
             .build(data)
             .render()
             .nativeImage()
