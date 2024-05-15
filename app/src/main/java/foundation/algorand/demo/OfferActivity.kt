@@ -48,7 +48,7 @@ class OfferActivity : AppCompatActivity() {
         binding.lifecycleOwner = this
         binding.viewModel = viewModel
         binding.switchButton.setOnClickListener {
-            val myIntent = Intent(this, MainActivity::class.java)
+            val myIntent = Intent(this, AnswerActivity::class.java)
             myIntent.setFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
             startActivity(myIntent)
         }

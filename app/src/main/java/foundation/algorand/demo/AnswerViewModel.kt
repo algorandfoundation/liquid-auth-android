@@ -1,7 +1,5 @@
 package foundation.algorand.demo
 
-import android.widget.Toast
-import androidx.biometric.BiometricPrompt
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
@@ -14,7 +12,7 @@ import foundation.algorand.auth.connect.AuthMessage
  *
  * Minimal state to handle FIDO2 PublicKeyCredentials and Proof of Knowledge
  */
-class MainViewModel: ViewModel() {
+class AnswerViewModel: ViewModel() {
     private val _account = MutableLiveData<Account>().apply {
         value = Account()
     }

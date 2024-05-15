@@ -31,7 +31,7 @@ import foundation.algorand.auth.connect.SignalClient
 import foundation.algorand.auth.crypto.KeyPairs
 import foundation.algorand.auth.crypto.decodeBase64
 import foundation.algorand.auth.fido2.*
-import foundation.algorand.demo.databinding.ActivityMainBinding
+import foundation.algorand.demo.databinding.ActivityAnswerBinding
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import okhttp3.OkHttpClient
@@ -47,12 +47,12 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
 
 
-class MainActivity : AppCompatActivity() {
+class AnswerActivity : AppCompatActivity() {
     companion object {
         private const val TAG = "MainActivity"
     }
-    private val viewModel: MainViewModel by viewModels()
-    private lateinit var binding: ActivityMainBinding
+    private val viewModel: AnswerViewModel by viewModels()
+    private lateinit var binding: ActivityAnswerBinding
 
     private val cookieJar = Cookies()
 
@@ -99,8 +99,8 @@ class MainActivity : AppCompatActivity() {
         Security.insertProviderAt(BouncyCastleProvider(), 0)
 
         // Create FIDO Client, TODO: refactor to Credential Manager
-        fido2Client = Fido2ApiClient(this@MainActivity)
-        scanner = GmsBarcodeScanning.getClient(this@MainActivity)
+        fido2Client = Fido2ApiClient(this@AnswerActivity)
+        scanner = GmsBarcodeScanning.getClient(this@AnswerActivity)
         executor = ContextCompat.getMainExecutor(this)
 
         // Get Intent Data
@@ -109,7 +109,7 @@ class MainActivity : AppCompatActivity() {
             Log.d(TAG, "Intent Detected: $intentUri")
             val msg = AuthMessage.fromUri(intentUri)
             viewModel.setMessage(msg)
-            signalClient = SignalClient(msg.origin, this@MainActivity, httpClient)
+            signalClient = SignalClient(msg.origin, this@AnswerActivity, httpClient)
             lifecycleScope.launch {
                 if (viewModel.credential.value === null) {
                     register(msg)
@@ -120,7 +120,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         // View Bindings
-        binding = ActivityMainBinding.inflate(layoutInflater)
+        binding = ActivityAnswerBinding.inflate(layoutInflater)
         binding.lifecycleOwner = this
         setContentView(binding.root)
         binding.viewModel = viewModel
@@ -190,7 +190,7 @@ class MainActivity : AppCompatActivity() {
     private fun handleMessages(authMessage: AuthMessage, msgStr: String, keyPair: KeyPair){
         // DataChannel Message Callback
         runOnUiThread {
-            Toast.makeText(this@MainActivity, msgStr, Toast.LENGTH_SHORT).show()
+            Toast.makeText(this@AnswerActivity, msgStr, Toast.LENGTH_SHORT).show()
         }
         try {
             val message = JSONObject(msgStr)
@@ -236,7 +236,7 @@ class MainActivity : AppCompatActivity() {
                     if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE){
                         startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(barcode.displayValue)))
                     } else {
-                        Toast.makeText(this@MainActivity, "Android 14 Required", Toast.LENGTH_LONG).show()
+                        Toast.makeText(this@AnswerActivity, "Android 14 Required", Toast.LENGTH_LONG).show()
                     }
 
                 // Handle Liquid Auth URI
@@ -246,7 +246,7 @@ class MainActivity : AppCompatActivity() {
                     viewModel.setMessage(msg)
                     // Connect to Service
                     lifecycleScope.launch {
-                        signalClient = SignalClient(msg.origin, this@MainActivity, httpClient)
+                        signalClient = SignalClient(msg.origin, this@AnswerActivity, httpClient)
                         if (viewModel.credential.value === null) {
                             register(msg)
                         } else {
@@ -256,10 +256,10 @@ class MainActivity : AppCompatActivity() {
                 }
             }
             .addOnCanceledListener {
-                Toast.makeText(this@MainActivity, "Canceled", Toast.LENGTH_LONG).show()
+                Toast.makeText(this@AnswerActivity, "Canceled", Toast.LENGTH_LONG).show()
             }
             .addOnFailureListener { e ->
-                Toast.makeText(this@MainActivity, e.message, Toast.LENGTH_LONG).show()
+                Toast.makeText(this@AnswerActivity, e.message, Toast.LENGTH_LONG).show()
             }
     }
 
@@ -309,10 +309,10 @@ class MainActivity : AppCompatActivity() {
 
         when {
             activityResult.resultCode != Activity.RESULT_OK ->
-                Toast.makeText(this@MainActivity, "Canceled", Toast.LENGTH_LONG).show()
+                Toast.makeText(this@AnswerActivity, "Canceled", Toast.LENGTH_LONG).show()
 
             bytes == null ->
-                Toast.makeText(this@MainActivity, "Error", Toast.LENGTH_LONG)
+                Toast.makeText(this@AnswerActivity, "Error", Toast.LENGTH_LONG)
                     .show()
 
             else -> {
@@ -320,11 +320,11 @@ class MainActivity : AppCompatActivity() {
                 val credential = PublicKeyCredential.deserializeFromBytes(bytes)
                 val response = credential.response
                 if (response is AuthenticatorErrorResponse) {
-                    Toast.makeText(this@MainActivity, response.errorMessage, Toast.LENGTH_LONG)
+                    Toast.makeText(this@AnswerActivity, response.errorMessage, Toast.LENGTH_LONG)
                         .show()
                 } else {
                     if (signature === null) {
-                        Toast.makeText(this@MainActivity, "Signature is null", Toast.LENGTH_LONG).show()
+                        Toast.makeText(this@AnswerActivity, "Signature is null", Toast.LENGTH_LONG).show()
                         return
                     }
                     val msg = viewModel.message.value!!
@@ -369,7 +369,7 @@ class MainActivity : AppCompatActivity() {
                         })
                         // Update Render/State
                         viewModel.setCredential(credential)
-                        Toast.makeText(this@MainActivity, "Registered Credentials!", Toast.LENGTH_LONG).show()
+                        Toast.makeText(this@AnswerActivity, "Registered Credentials!", Toast.LENGTH_LONG).show()
                     }
 
                 }
@@ -408,17 +408,17 @@ class MainActivity : AppCompatActivity() {
         val bytes = activityResult.data?.getByteArrayExtra(Fido.FIDO2_KEY_CREDENTIAL_EXTRA)
         when {
             activityResult.resultCode != Activity.RESULT_OK ->
-                Toast.makeText(this@MainActivity, "Canceled", Toast.LENGTH_LONG).show()
+                Toast.makeText(this@AnswerActivity, "Canceled", Toast.LENGTH_LONG).show()
 
             bytes == null ->
-                Toast.makeText(this@MainActivity, "Authenticate Error", Toast.LENGTH_LONG).show()
+                Toast.makeText(this@AnswerActivity, "Authenticate Error", Toast.LENGTH_LONG).show()
 
             else -> {
                 // Handle PublicKeyCredential Response from Authenticator
                 val credential = PublicKeyCredential.deserializeFromBytes(bytes)
                 val pubKeyCredentialResponse = credential.response
                 if (pubKeyCredentialResponse is AuthenticatorErrorResponse) {
-                    Toast.makeText(this@MainActivity, pubKeyCredentialResponse.errorMessage, Toast.LENGTH_LONG)
+                    Toast.makeText(this@AnswerActivity, pubKeyCredentialResponse.errorMessage, Toast.LENGTH_LONG)
                         .show()
                 } else {
                     lifecycleScope.launch {
