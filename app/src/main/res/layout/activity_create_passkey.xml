@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <layout xmlns:app="http://schemas.android.com/apk/res-auto" xmlns:android="http://schemas.android.com/apk/res/android">
     <data>
-        <variable name="viewModel" type="foundation.algorand.demo.CreatePasskeyViewModel"/>
+        <variable name="viewModel" type="foundation.algorand.demo.headless.CreatePasskeyViewModel"/>
     </data>
 <androidx.constraintlayout.widget.ConstraintLayout
         android:id="@+id/container"

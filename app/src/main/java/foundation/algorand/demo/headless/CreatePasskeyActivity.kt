@@ -1,4 +1,4 @@
-package foundation.algorand.demo
+package foundation.algorand.demo.headless
 
 import android.app.Activity
 import android.os.Build
@@ -9,6 +9,7 @@ import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
 import androidx.credentials.CreatePublicKeyCredentialRequest
 import androidx.credentials.provider.PendingIntentHandler
+import foundation.algorand.demo.R
 import foundation.algorand.demo.databinding.ActivityCreatePasskeyBinding
 
 

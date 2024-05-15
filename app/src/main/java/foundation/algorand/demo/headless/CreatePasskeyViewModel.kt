@@ -1,4 +1,4 @@
-package foundation.algorand.demo
+package foundation.algorand.demo.headless
 
 import android.annotation.SuppressLint
 import android.content.Context

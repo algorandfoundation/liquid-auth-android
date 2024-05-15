@@ -1,7 +1,8 @@
-package foundation.algorand.demo
+package foundation.algorand.demo.headless
 
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
+import foundation.algorand.demo.R
 
 /**
  * Placeholder for Begin action

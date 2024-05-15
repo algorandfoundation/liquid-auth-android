@@ -1,4 +1,4 @@
-package foundation.algorand.demo
+package foundation.algorand.demo.headless
 
 import android.app.Activity
 import android.os.Build
@@ -9,6 +9,7 @@ import androidx.activity.viewModels
 import androidx.annotation.RequiresApi
 import androidx.credentials.provider.PendingIntentHandler
 import androidx.lifecycle.lifecycleScope
+import foundation.algorand.demo.R
 import foundation.algorand.demo.databinding.ActivityGetPasskeyBinding
 import kotlinx.coroutines.launch
 
