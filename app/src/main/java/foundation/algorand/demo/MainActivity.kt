@@ -1,6 +1,5 @@
 package foundation.algorand.demo
 
-import android.R.attr.duration
 import android.app.Activity
 import android.content.Intent
 import android.net.Uri
@@ -143,6 +142,9 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Transaction Biometric Prompt
+     */
     suspend fun biometrics(msg: AuthMessage, txn: Transaction):BiometricPrompt.AuthenticationResult? {
         return suspendCoroutine { continuation ->
             biometricPrompt = BiometricPrompt(this, executor,
@@ -172,9 +174,19 @@ class MainActivity : AppCompatActivity() {
             biometricPrompt.authenticate(promptInfo)
         }
     }
+
+    /**
+     * Decode Unsigned Transaction
+     */
     private fun decodeUnsignedTransaction(unsignedTxn: String): Transaction? {
        return  Encoder.decodeFromMsgPack(unsignedTxn.decodeBase64(), Transaction::class.java)
     }
+
+    /**
+     * Handle Messages
+     *
+     * Callback for datachannel messages
+     */
     private fun handleMessages(authMessage: AuthMessage, msgStr: String, keyPair: KeyPair){
         // DataChannel Message Callback
         runOnUiThread {
@@ -209,15 +221,25 @@ class MainActivity : AppCompatActivity() {
      * Connect/Proof of Knowledge API
      *
      * Connects the Wallet/Android Application to a dApp/website using a Barcode.
-     * The barcode includes a Message which includes the origin, requestId and challenge to be signed.
-     * The wallet must sign the challenge and attach both the wallet address and
+     * The barcode must use the liquid uri scheme and contain a request id.
+     *
+     * liquid://<ORIGIN>/?requestId=<REQUEST_ID>
+     *
+     * In Android 14, the application can handle the FIDO:/ URI scheme directly.
+     * This is useful when a user is registering the phone as an Authenticator for the first time.
      */
     private fun connect() {
-        val account = viewModel.account.value!!
         scanner.startScan()
             .addOnSuccessListener { barcode ->
+                // Handle any scanned FIDO URI directly
                 if(barcode.displayValue!!.startsWith("FIDO:/")){
-                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(barcode.displayValue)))
+                    if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE){
+                        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(barcode.displayValue)))
+                    } else {
+                        Toast.makeText(this@MainActivity, "Android 14 Required", Toast.LENGTH_LONG).show()
+                    }
+
+                // Handle Liquid Auth URI
                 } else {
                     // Decode Barcode Message
                     val msg = AuthMessage.fromBarcode(barcode)
@@ -307,12 +329,14 @@ class MainActivity : AppCompatActivity() {
                     }
                     val msg = viewModel.message.value!!
                     val account = viewModel.account.value!!
+                    // Create the Liquid Extension JSON
                     val liquidExtJSON = JSONObject()
                     liquidExtJSON.put("type", "algorand")
                     liquidExtJSON.put("requestId", msg.requestId)
                     liquidExtJSON.put("address", account.address.toString() )
                     liquidExtJSON.put("signature", Base64.encodeBase64URLSafeString(signature!!))
                     liquidExtJSON.put("device", android.os.Build.MODEL)
+
                     lifecycleScope.launch {
                         // POST Authenticator Results to FIDO2 API
                        attestationApi.postAttestationResult(
@@ -322,10 +346,11 @@ class MainActivity : AppCompatActivity() {
                             liquidExtJSON
                         ).await()
 
-                        // Create P2P Channel
+                        // Get KeyPair for signing
                         val keyPair = KeyPairs.getKeyPair(account.toMnemonic())
-                        // Connect to the service and if the message is unsigned, pass in a keypair
+                        // Create P2P Channel
                         val dc = signalClient?.peer(msg.requestId, "answer" )
+                        // Handle the DataChannel
                         signalClient?.handleDataChannel(dc!!, {
                             handleMessages(msg, it, keyPair)
                         }, {
