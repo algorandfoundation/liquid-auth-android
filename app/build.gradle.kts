@@ -74,7 +74,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:$coroutineVersion")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutineVersion")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:$coroutineVersion")
-
+    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0")
     // Dagger/Hilt
     val hiltVersion by extra { "2.48" }
     implementation("com.google.dagger:hilt-android:$hiltVersion")

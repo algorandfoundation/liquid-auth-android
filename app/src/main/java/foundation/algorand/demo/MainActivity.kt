@@ -1,6 +1,8 @@
 package foundation.algorand.demo
 
+import android.R.attr.duration
 import android.app.Activity
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.os.StrictMode
@@ -15,8 +17,6 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
-import com.algorand.algosdk.kmd.client.model.SignTransactionRequest
-import com.algorand.algosdk.transaction.SignedTransaction
 import com.algorand.algosdk.transaction.Transaction
 import com.algorand.algosdk.util.Encoder
 import com.google.android.gms.fido.Fido
@@ -26,11 +26,10 @@ import com.google.android.gms.fido.fido2.api.common.PublicKeyCredential
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanner
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 import foundation.algorand.auth.Cookie
-import foundation.algorand.auth.connect.ConnectApi
 import foundation.algorand.auth.connect.AuthMessage
+import foundation.algorand.auth.connect.SignalClient
 import foundation.algorand.auth.crypto.KeyPairs
 import foundation.algorand.auth.crypto.decodeBase64
-import foundation.algorand.auth.crypto.toBase64
 import foundation.algorand.auth.fido2.*
 import foundation.algorand.demo.databinding.ActivityMainBinding
 import kotlinx.coroutines.launch
@@ -40,9 +39,7 @@ import org.apache.commons.codec.binary.Base64
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.json.JSONArray
 import org.json.JSONObject
-import org.webrtc.DataChannel
 import ru.gildor.coroutines.okhttp.await
-import java.io.IOException
 import java.security.KeyPair
 import java.security.Security
 import java.util.concurrent.Executor
@@ -68,7 +65,7 @@ class MainActivity : AppCompatActivity() {
 
     // FIDO/Auth interfaces
     private var fido2Client: Fido2ApiClient? = null
-    private val connectApi = ConnectApi(httpClient)
+    private var signalClient: SignalClient? = null
     private val attestationApi = AttestationApi(httpClient)
     private val assertionApi = AssertionApi(httpClient)
 
@@ -116,10 +113,15 @@ class MainActivity : AppCompatActivity() {
 
         }
 
+        binding.switchButton.setOnClickListener {
+            val myIntent = Intent(this, OfferActivity::class.java)
+            myIntent.setFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+            startActivity(myIntent)
+        }
         binding.disconnectButton.setOnClickListener {
             cookieJar.clear()
             setSession(null)
-            connectApi.disconnect()
+            signalClient?.disconnect()
         }
     }
 
@@ -157,25 +159,32 @@ class MainActivity : AppCompatActivity() {
     }
     private fun handleMessages(authMessage: AuthMessage, msgStr: String, keyPair: KeyPair){
         // DataChannel Message Callback
-        val message = JSONObject(msgStr)
-        if(message.get("type") == "transaction") {
-            lifecycleScope.launch {
-                // Decode the Transaction
-                val txn = decodeUnsignedTransaction(message.get("txn").toString())
-                // Display a biometric prompt with some transaction details
-                val biometricResult = biometrics(authMessage, txn!!)
-                if(biometricResult !== null){
-                    val bytes = txn.bytesToSign()
-                    val signatureBytes = KeyPairs.rawSignBytes(bytes, keyPair.private)
-                    val sig = Base64.encodeBase64URLSafeString(signatureBytes)
-                    val responseObj = JSONObject()
-                    responseObj.put("sig", sig)
-                    responseObj.put("txId", txn.txID())
-                    responseObj.put("type", "transaction-signature")
-                    Log.d(TAG, "Sending: ${responseObj.toString()}")
-                    connectApi.peerApi?.send(responseObj.toString())
+        runOnUiThread {
+            Toast.makeText(this@MainActivity, msgStr, Toast.LENGTH_SHORT).show()
+        }
+        try {
+            val message = JSONObject(msgStr)
+            if (message.get("type") == "transaction") {
+                lifecycleScope.launch {
+                    // Decode the Transaction
+                    val txn = decodeUnsignedTransaction(message.get("txn").toString())
+                    // Display a biometric prompt with some transaction details
+                    val biometricResult = biometrics(authMessage, txn!!)
+                    if (biometricResult !== null) {
+                        val bytes = txn.bytesToSign()
+                        val signatureBytes = KeyPairs.rawSignBytes(bytes, keyPair.private)
+                        val sig = Base64.encodeBase64URLSafeString(signatureBytes)
+                        val responseObj = JSONObject()
+                        responseObj.put("sig", sig)
+                        responseObj.put("txId", txn.txID())
+                        responseObj.put("type", "transaction-signature")
+                        Log.d(TAG, "Sending: ${responseObj.toString()}")
+                        signalClient?.peerClient?.send(responseObj.toString())
+                    }
                 }
             }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error: $e")
         }
     }
     /**
@@ -194,6 +203,7 @@ class MainActivity : AppCompatActivity() {
                 viewModel.setMessage(msg)
                 // Connect to Service
                 lifecycleScope.launch {
+                   signalClient = SignalClient(msg.origin, this@MainActivity, httpClient)
                     if(viewModel.credential.value === null){
                         register(msg)
                     } else {
@@ -293,21 +303,23 @@ class MainActivity : AppCompatActivity() {
                         // Create P2P Channel
                         val keyPair = KeyPairs.getKeyPair(account.toMnemonic())
                         // Connect to the service and if the message is unsigned, pass in a keypair
-                        connectApi.connect(application, msg, {
+                        val dc = signalClient?.peer(msg.requestId, "answer" )
+                        signalClient?.handleDataChannel(dc!!, {
+                            handleMessages(msg, it, keyPair)
+                        }, {
                             Log.d(TAG, "onStateChange($it)")
                             if(it === "OPEN"){
                                 Log.d(TAG, "Sending Credential")
                                 val credMessage = JSONObject()
+                                credMessage.put("address", account.address.toString())
                                 credMessage.put("device", android.os.Build.MODEL)
                                 credMessage.put("origin", msg.origin)
                                 credMessage.put("id", credential.id)
                                 credMessage.put("prevCounter", 0)
                                 credMessage.put("type", "credential")
-                                connectApi.peerApi!!.send(credMessage.toString())
+                                signalClient!!.peerClient!!.send(credMessage.toString())
                             }
-                        }) {
-                            handleMessages(msg, it, keyPair)
-                        }
+                        })
                         // Update Render/State
                         viewModel.setCredential(credential)
                         Toast.makeText(this@MainActivity, "Registered Credentials!", Toast.LENGTH_LONG).show()
@@ -328,7 +340,7 @@ class MainActivity : AppCompatActivity() {
         val response = assertionApi.postAssertionOptions(
             msg.origin,
             userAgent,
-            credential.id
+            credential.id!!
         ).await()
         val session = Cookie.fromResponse(response)
         session?.let {
@@ -389,23 +401,27 @@ class MainActivity : AppCompatActivity() {
                             viewModel.setCount(0)
                         }
                         val msg = viewModel.message.value!!
+                        val account = viewModel.account.value!!
                         val keyPair = KeyPairs.getKeyPair(viewModel.account.value!!.toMnemonic())
                         // Connect to the service then handle state changes and messages
-                        connectApi.connect(application, msg, {
+                        val dc = signalClient?.peer(msg.requestId, "answer" )
+                        Log.d(TAG, "DataChannel: $dc")
+                        signalClient?.handleDataChannel(dc!!, {
+                            handleMessages(msg, it, keyPair)
+                        },  {
                             Log.d(TAG, "onStateChange($it)")
                             if(it === "OPEN"){
                                 Log.d(TAG, "Sending Credential")
                                 val credMessage = JSONObject()
+                                credMessage.put("address", account.address.toString())
                                 credMessage.put("device", android.os.Build.MODEL)
                                 credMessage.put("origin", msg.origin)
                                 credMessage.put("id", credential.id)
                                 credMessage.put("prevCounter", viewModel.count.value!!)
                                 credMessage.put("type", "credential")
-                                connectApi.peerApi!!.send(credMessage.toString())
+                                signalClient!!.peerClient!!.send(credMessage.toString())
                             }
-                        }) {
-                            handleMessages(msg, it, keyPair)
-                        }
+                        })
                     }
                 }
             }

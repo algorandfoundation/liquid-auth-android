@@ -72,7 +72,7 @@ class AttestationApi @Inject constructor(
         liquidExt: JSONObject? = null
     ): Call {
         val path = "$origin/attestation/response"
-        val rawId = credential.rawId.toBase64()
+        val rawId = credential.rawId!!.toBase64()
         val response = credential.response as AuthenticatorAttestationResponse
 
         val payload = JSONObject()

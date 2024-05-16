@@ -45,7 +45,7 @@ class AssertionApi @Inject constructor(
         credential: PublicKeyCredential,
         liquidExt: JSONObject?
     ): Call {
-        val rawId = credential.rawId.toBase64()
+        val rawId = credential.rawId!!.toBase64()
         val response = credential.response as AuthenticatorAssertionResponse
 
         val payload = JSONObject()
