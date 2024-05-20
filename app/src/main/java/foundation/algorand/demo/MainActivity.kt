@@ -3,6 +3,7 @@ package foundation.algorand.demo
 import android.R.attr.duration
 import android.app.Activity
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.StrictMode
@@ -102,6 +103,23 @@ class MainActivity : AppCompatActivity() {
         fido2Client = Fido2ApiClient(this@MainActivity)
         scanner = GmsBarcodeScanning.getClient(this@MainActivity)
         executor = ContextCompat.getMainExecutor(this)
+
+        // Get Intent Data
+        val intentUri: Uri? = intent?.data
+        if (intentUri !== null) {
+            Log.d(TAG, "Intent Detected: $intentUri")
+            val msg = AuthMessage.fromUri(intentUri)
+            viewModel.setMessage(msg)
+            signalClient = SignalClient(msg.origin, this@MainActivity, httpClient)
+            lifecycleScope.launch {
+                if (viewModel.credential.value === null) {
+                    register(msg)
+                } else {
+                    authenticate(msg, viewModel.credential.value!!)
+                }
+            }
+        }
+
         // View Bindings
         binding = ActivityMainBinding.inflate(layoutInflater)
         binding.lifecycleOwner = this
