@@ -63,11 +63,15 @@ dependencies {
     implementation("com.algorand:algosdk:2.4.0")
     implementation("org.bouncycastle:bcprov-jdk15on:1.67")
 
-    // FIDO2
+    // FIDO2 - Deprecated
     implementation("com.google.android.gms:play-services-fido:20.1.0")
 
     // Barcode Reader
     implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
+
+    // Credentials
+    implementation("androidx.credentials:credentials:1.2.2")
+    implementation("androidx.credentials:credentials-play-services-auth:1.2.2")
 
     // Kotlin Coroutine
     val coroutineVersion by extra { "1.7.1" }
@@ -84,7 +88,11 @@ dependencies {
     implementation("androidx.biometric:biometric-ktx:1.2.0-alpha05")
     kapt("com.google.dagger:hilt-compiler:$hiltVersion")
     kapt("androidx.hilt:hilt-compiler:1.2.0")
-
+    // Rooms
+    val room_version = "2.6.1"
+    implementation("androidx.room:room-ktx:$room_version")
+    implementation("androidx.room:room-runtime:$room_version")
+    kapt("androidx.room:room-compiler:$room_version")
     // HTTP Requests
     val okhttpVersion by extra { "4.12.0" }
     implementation("com.squareup.okhttp3:okhttp:$okhttpVersion")

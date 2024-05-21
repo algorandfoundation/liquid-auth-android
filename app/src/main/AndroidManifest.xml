@@ -4,6 +4,7 @@
 
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+    <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
 
     <application
             android:allowBackup="true"
@@ -19,6 +20,7 @@
         <activity
                 android:name=".OfferActivity"
                 android:exported="false"/>
+
         <activity
                 android:name=".MainActivity"
                 android:exported="true">
@@ -33,6 +35,50 @@
                 <data android:scheme="liquid"/>
             </intent-filter>
         </activity>
+        <activity
+                android:name=".BeginGetPasskeyActivity"
+                android:excludeFromRecents="true"
+                android:exported="false">
+            <intent-filter>
+                <action android:name="foundation.algorand.demo.BEGIN_GET_PASSKEY"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+            </intent-filter>
+        </activity>
+        <activity
+                android:name=".GetPasskeyActivity"
+                android:excludeFromRecents="true"
+                android:exported="false">
+            <intent-filter>
+                <action android:name="foundation.algorand.demo.GET_PASSKEY"/>
+
+                <category android:name="android.intent.category.DEFAULT"/>
+            </intent-filter>
+        </activity>
+        <activity
+                android:name=".CreatePasskeyActivity"
+                android:excludeFromRecents="true"
+                android:exported="false">
+            <intent-filter>
+                <action android:name="foundation.algorand.demo.CREATE_PASSKEY"/>
+
+                <category android:name="android.intent.category.DEFAULT"/>
+            </intent-filter>
+        </activity>
+        <service
+                android:name=".services.LiquidCredentialProviderService"
+                android:enabled="true"
+                android:exported="true"
+                android:icon="@mipmap/ic_launcher"
+                android:label="Liquid Auth"
+                android:permission="android.permission.BIND_CREDENTIAL_PROVIDER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.credentials.CredentialProviderService"/>
+            </intent-filter>
+
+            <meta-data
+                    android:name="android.credentials.provider"
+                    android:resource="@xml/provider"/>
+        </service>
     </application>
 
 </manifest>
