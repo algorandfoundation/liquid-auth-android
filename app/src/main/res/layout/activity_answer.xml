@@ -25,14 +25,23 @@
             app:layout_constraintTop_toBottomOf="@+id/answerTitle"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent"/>
-    <TextView
-            android:text="@{@string/wallet(viewModel.account.address)}"
+    <Button
+            android:text="Rekey"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content" android:id="@+id/walletAddress"
+            android:layout_height="wrap_content"
+            android:id="@+id/rekeyButton"
+            android:backgroundTint="@color/design_default_color_error"
             app:layout_constraintTop_toBottomOf="@+id/connectButton"
             app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"/>
+    <TextView
+            android:text="@{@string/wallet(viewModel.selected.address)}"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" android:id="@+id/walletAddress"
+            app:layout_constraintTop_toBottomOf="@+id/rekeyButton"
+            app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
-
+            android:textIsSelectable="true"
     />
     <TextView
             android:text="@{@string/origin(viewModel.message.origin)}"

@@ -127,7 +127,27 @@ class AnswerActivity : AppCompatActivity() {
 
         binding.connectButton.setOnClickListener {
             connect()
-
+        }
+        binding.rekeyButton.setOnClickListener {
+            val result = viewModel.algod.AccountInformation(viewModel.account.value!!.address).execute()
+            if(!result.isSuccessful){
+                Toast.makeText(this@AnswerActivity, "Error getting account information", Toast.LENGTH_LONG).show()
+                return@setOnClickListener
+            }
+            val accountInfo = result.body()
+            if(accountInfo.amount < 1000){
+                Toast.makeText(this@AnswerActivity, "Insufficient Funds", Toast.LENGTH_LONG).show()
+                return@setOnClickListener
+            }
+            // Rekey Main Account to the Rekey Account
+            if(viewModel.account.value!!.address === viewModel.selected.value!!.address){
+                viewModel.rekey(viewModel.account.value!!, viewModel.rekey.value!!)
+                Toast.makeText(this@AnswerActivity, "Rekeyed to ${viewModel.rekey.value!!.address}", Toast.LENGTH_LONG).show()
+            // Rekey back to the Main Account from the Rekey Account
+            } else {
+                viewModel.rekey(viewModel.account.value!!, viewModel.account.value!!, viewModel.rekey.value!!)
+                Toast.makeText(this@AnswerActivity, "Removed Rekey", Toast.LENGTH_LONG).show()
+            }
         }
 
         binding.switchButton.setOnClickListener {
@@ -271,6 +291,7 @@ class AnswerActivity : AppCompatActivity() {
      */
     private suspend fun register(msg: AuthMessage, options: JSONObject = JSONObject()) {
         val account = viewModel.account.value!!
+        val selected = viewModel.selected.value!!
         Log.d(TAG, "Registering new Credential with ${account.address} at ${msg.origin}")
 
         // Create Options for FIDO2 Server
@@ -290,7 +311,7 @@ class AnswerActivity : AppCompatActivity() {
         // Convert ResponseBody to FIDO2 PublicKeyCredentialCreationOptions
         val pubKeyCredentialCreationOptions = response.body!!.toPublicKeyCredentialCreationOptions()
         // Sign the challenge with the algorand account, this is used in the liquid FIDO2 extension
-        signature = KeyPairs.rawSignBytes(pubKeyCredentialCreationOptions.challenge, KeyPairs.getKeyPair(account.toMnemonic()).private)
+        signature = KeyPairs.rawSignBytes(pubKeyCredentialCreationOptions.challenge, KeyPairs.getKeyPair(selected.toMnemonic()).private)
         // Kick off FIDO2 Client Intent
         val pendingIntent = fido2Client!!.getRegisterPendingIntent(pubKeyCredentialCreationOptions).await()
         attestationIntentLauncher.launch(
@@ -449,7 +470,7 @@ class AnswerActivity : AppCompatActivity() {
                         }
                         val msg = viewModel.message.value!!
                         val account = viewModel.account.value!!
-                        val keyPair = KeyPairs.getKeyPair(viewModel.account.value!!.toMnemonic())
+                        val keyPair = KeyPairs.getKeyPair(viewModel.selected.value!!.toMnemonic())
                         // Connect to the service then handle state changes and messages
                         val dc = signalClient?.peer(msg.requestId, "answer" )
                         Log.d(TAG, "DataChannel: $dc")
