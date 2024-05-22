@@ -57,7 +57,7 @@ android {
 }
 
 dependencies {
-    implementation(project(mapOf("path" to ":auth")))
+    implementation(project(mapOf("path" to ":liquid")))
 
     // Algorand SDK
     implementation("com.algorand:algosdk:2.4.0")
