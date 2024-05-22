@@ -28,10 +28,14 @@ import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 import foundation.algorand.auth.Cookie
 import foundation.algorand.auth.connect.AuthMessage
 import foundation.algorand.auth.connect.SignalClient
-import foundation.algorand.auth.crypto.KeyPairs
 import foundation.algorand.auth.crypto.decodeBase64
 import foundation.algorand.auth.fido2.*
 import foundation.algorand.demo.databinding.ActivityAnswerBinding
+import java.security.KeyPair
+import java.security.Security
+import java.util.concurrent.Executor
+import kotlin.coroutines.resume
+import kotlin.coroutines.suspendCoroutine
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import okhttp3.OkHttpClient
@@ -40,12 +44,6 @@ import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.json.JSONArray
 import org.json.JSONObject
 import ru.gildor.coroutines.okhttp.await
-import java.security.KeyPair
-import java.security.Security
-import java.util.concurrent.Executor
-import kotlin.coroutines.resume
-import kotlin.coroutines.suspendCoroutine
-
 
 class AnswerActivity : AppCompatActivity() {
     companion object {
@@ -296,7 +294,7 @@ class AnswerActivity : AppCompatActivity() {
 
         // Create Options for FIDO2 Server
         options.put("username", account.address.toString())
-        options.put("displayName",  "Liquid Auth User")
+        options.put("displayName", "Liquid Auth User")
         options.put("authenticatorSelection", JSONObject().put("userVerification", "required"))
         val extensions = JSONObject()
         extensions.put("liquid", true)

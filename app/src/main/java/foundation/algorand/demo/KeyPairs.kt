@@ -1,4 +1,4 @@
-package foundation.algorand.auth.crypto
+package foundation.algorand.demo
 
 import android.util.Log
 import com.algorand.algosdk.account.Account
@@ -11,12 +11,10 @@ import java.security.PrivateKey
 import java.security.Signature
 import java.security.SignatureException
 
-
-
 class KeyPairs {
     companion object {
         const val TAG = "verify.crypto.KeyPairs"
-        const val KEY_ALGO =  "Ed25519"
+        const val KEY_ALGO = "Ed25519"
         private const val SK_SIZE = 32
         const val SK_SIZE_BITS = SK_SIZE * 8
         @Throws(NoSuchAlgorithmException::class)
@@ -44,6 +42,4 @@ class KeyPairs {
             return generator.genKeyPair()
         }
     }
-
-
 }
