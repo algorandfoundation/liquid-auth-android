@@ -220,30 +220,30 @@ class MainActivity : AppCompatActivity() {
     private fun connect() {
         val account = viewModel.account.value!!
         scanner.startScan()
-                .addOnSuccessListener { barcode ->
-                    if (barcode.displayValue!!.startsWith("FIDO:/")) {
-                        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(barcode.displayValue)))
-                    } else {
-                        // Decode Barcode Message
-                        val msg = AuthMessage.fromBarcode(barcode)
-                        viewModel.setMessage(msg)
-                        // Connect to Service
-                        lifecycleScope.launch {
-                            signalClient = SignalClient(msg.origin, this@MainActivity, httpClient)
-                            if (viewModel.credential.value === null) {
-                                register(msg)
-                            } else {
-                                authenticate(msg, viewModel.credential.value!!)
-                            }
+            .addOnSuccessListener { barcode ->
+                if(barcode.displayValue!!.startsWith("FIDO:/")){
+                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(barcode.displayValue)))
+                } else {
+                    // Decode Barcode Message
+                    val msg = AuthMessage.fromBarcode(barcode)
+                    viewModel.setMessage(msg)
+                    // Connect to Service
+                    lifecycleScope.launch {
+                        signalClient = SignalClient(msg.origin, this@MainActivity, httpClient)
+                        if (viewModel.credential.value === null) {
+                            register(msg)
+                        } else {
+                            authenticate(msg, viewModel.credential.value!!)
                         }
                     }
                 }
-                .addOnCanceledListener {
-                    Toast.makeText(this@MainActivity, "Canceled", Toast.LENGTH_LONG).show()
-                }
-                .addOnFailureListener { e ->
-                    Toast.makeText(this@MainActivity, e.message, Toast.LENGTH_LONG).show()
-                }
+            }
+            .addOnCanceledListener {
+                Toast.makeText(this@MainActivity, "Canceled", Toast.LENGTH_LONG).show()
+            }
+            .addOnFailureListener { e ->
+                Toast.makeText(this@MainActivity, e.message, Toast.LENGTH_LONG).show()
+            }
     }
 
     /**
