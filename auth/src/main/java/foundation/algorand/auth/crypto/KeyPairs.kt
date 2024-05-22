@@ -1,8 +1,8 @@
 package foundation.algorand.auth.crypto
 
 import android.util.Log
-import cash.z.ecc.android.bip39.Mnemonics.MnemonicCode
-import cash.z.ecc.android.bip39.Mnemonics.WordCount
+import com.algorand.algosdk.account.Account
+import com.algorand.algosdk.mnemonic.Mnemonic
 import java.security.InvalidKeyException
 import java.security.KeyPair
 import java.security.KeyPairGenerator
@@ -11,10 +11,12 @@ import java.security.PrivateKey
 import java.security.Signature
 import java.security.SignatureException
 
+
+
 class KeyPairs {
     companion object {
         const val TAG = "verify.crypto.KeyPairs"
-        const val KEY_ALGO = "Ed25519"
+        const val KEY_ALGO =  "Ed25519"
         private const val SK_SIZE = 32
         const val SK_SIZE_BITS = SK_SIZE * 8
         @Throws(NoSuchAlgorithmException::class)
@@ -31,16 +33,17 @@ class KeyPairs {
             }
         }
         fun getKeyPair(): KeyPair {
-            val mnemonicCode: MnemonicCode = MnemonicCode(WordCount.COUNT_24)
-            return getKeyPair(mnemonicCode.joinToString(" "))
+            return getKeyPair(Account().toMnemonic())
         }
         fun getKeyPair(mnemonic: String): KeyPair {
             Log.d(TAG, "getKeyPair(******)")
             val generator = KeyPairGenerator.getInstance(KEY_ALGO)
-            val entropy = MnemonicCode(mnemonic.toCharArray()).toEntropy()
-            val fixedRandom = FixedSecureRandom(entropy)
+            val seed = Mnemonic.toKey(mnemonic)
+            val fixedRandom = FixedSecureRandom(seed)
             generator.initialize(SK_SIZE_BITS, fixedRandom)
             return generator.genKeyPair()
         }
     }
+
+
 }

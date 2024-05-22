@@ -35,8 +35,8 @@ android {
 }
 
 dependencies {
-    // BIP39-standard for Mnemonics
-    implementation("cash.z.ecc.android:kotlin-bip39:1.0.7")
+    // AlgoSDK
+    implementation("com.algorand:algosdk:2.4.0")
     // FIDO2
     implementation("com.google.android.gms:play-services-fido:21.0.0")
     // Barcode Scanner
