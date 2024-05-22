@@ -54,7 +54,7 @@ Clone the repository and open in Android Studio
 git clone git@github.com:algorandfoundation/liquid-auth-android.git
 ```
 
-Connect a device and run the `app` target on a device, it is recommended to use a physical device for testing.
+Connect a device and run the `demo` target on a device, it is recommended to use a physical device for testing.
 
 Make sure to also [start the liquid-auth service](https://github.com/algorandfoundation/liquid-auth?tab=readme-ov-file#getting-started) on your local machine or a remote server.
 
@@ -65,7 +65,7 @@ the library is not yet published to a public repository.
 
 Add `aar` files in your project:
 ```bash
-cp ./auth/build/outputs/*-release.aar <ANDROID_APP_LOCATION>/libs
+cp ./liquid/build/outputs/*-release.aar <ANDROID_APP_LOCATION>/libs
 ```
 
 Add jcenter() to your `settings.gradle.kts` file in the project root:
@@ -99,10 +99,10 @@ implementation(libs.qrcode.kotlin)
 implementation(libs.okhttp)
 ```
 
-Basic Usage of creating the answer client:
+Basic Usage of creating the Offer client:
 
 ```kotlin
-class MainActivity : ComponentActivity() {
+class OfferActivity : ComponentActivity() {
     private var signalClient: SignalClient? = null
     // Third Party APIs
     private var httpClient = OkHttpClient.Builder()
@@ -111,7 +111,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // Create Client
-        signalClient = SignalClient("https://liquid-auth.onrender.com", this@MainActivity, httpClient)
+        signalClient = SignalClient("https://liquid-auth.onrender.com", this@OfferActivity, httpClient)
         lifecycleScope.launch {
             // Generate UUID
             val requestId = signalClient!!.generateRequestId()
@@ -125,11 +125,11 @@ class MainActivity : ComponentActivity() {
             // Handle the data-channel
             signalClient!!.handleDataChannel(dc!!, {
                 // On Message
-                Toast.makeText(this@MainActivity, it, Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@OfferActivity, it, Toast.LENGTH_SHORT).show()
             }, {
                 // On State Change
                 it?.let {
-                    Toast.makeText(this@MainActivity, "onStateChanged($it)", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@OfferActivity, "onStateChanged($it)", Toast.LENGTH_SHORT).show()
                 }
             })
         }
@@ -137,4 +137,4 @@ class MainActivity : ComponentActivity() {
 }
 ```
 
-See the [MainActivity](app/src/main/java/foundation/algorand/demo/MainActivity.kt) in the demo app for an example of how to create an Offer.
+See the [AnswerActivity](demo/src/main/java/foundation/algorand/demo/AnswerActivity.kt) in the demo app for an example of how to create a passkey and complete the handshake.
