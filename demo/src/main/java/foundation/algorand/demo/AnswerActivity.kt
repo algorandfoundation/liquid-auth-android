@@ -6,6 +6,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -24,6 +25,7 @@ import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentTransaction
 import androidx.lifecycle.lifecycleScope
+import com.algorand.algosdk.account.Account
 import com.algorand.algosdk.transaction.Transaction
 import com.algorand.algosdk.util.Encoder
 import com.google.android.gms.fido.Fido
@@ -56,7 +58,6 @@ import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.json.JSONArray
 import org.json.JSONObject
 import ru.gildor.coroutines.okhttp.await
-import java.security.KeyPair
 import java.security.Security
 import java.util.concurrent.Executor
 import kotlin.coroutines.resume
@@ -86,9 +87,15 @@ class AnswerActivity : AppCompatActivity() {
     private val attestationApi = AttestationApi(httpClient)
     private val assertionApi = AssertionApi(httpClient)
     private val credentialRepository = CredentialRepository()
+
     private lateinit var keyguardManager: KeyguardManager
+    private lateinit var sharedPref: SharedPreferences
+
+
+    // Fragments
     private var settingsDialogFragment = SettingsDialogFragment()
     private lateinit var accountDialogFragment: AccountDialogFragment
+
     private val userAgent = "${BuildConfig.APPLICATION_ID}/${BuildConfig.VERSION_NAME} " +
             "(Android ${Build.VERSION.RELEASE}; ${Build.MODEL}; ${Build.BRAND})"
 
@@ -123,7 +130,9 @@ class AnswerActivity : AppCompatActivity() {
         scanner = GmsBarcodeScanning.getClient(this@AnswerActivity)
         executor = ContextCompat.getMainExecutor(this)
         keyguardManager = this@AnswerActivity.getSystemService(KEYGUARD_SERVICE) as KeyguardManager
-        // Get Intent Data
+        sharedPref = getSharedPreferences("ACCOUNT_SEEDS", Context.MODE_PRIVATE)
+
+        // Get Intent Data, this is when this activity is launched from a deep-link URI
         val intentUri: Uri? = intent?.data
         if (intentUri !== null) {
             Log.d(TAG, "Intent Detected: $intentUri")
@@ -139,12 +148,18 @@ class AnswerActivity : AppCompatActivity() {
             }
         }
 
+        // Ensure the device is secure to access FIDO/Passkeys
         if(!keyguardManager.isDeviceSecure){
             if(!settingsDialogFragment.isVisible){
                 settingsDialogFragment.show(supportFragmentManager, "CREATED")
             }
 
         }
+
+        // Load the Shared Preferences
+        hydrateSharedPreferences()
+
+        // Load the existing credentials
         lifecycleScope.launch {
             db = CredentialDatabase.getInstance(this@AnswerActivity)
             val credentials = db.credentialDao().getAll()
@@ -186,15 +201,41 @@ class AnswerActivity : AppCompatActivity() {
 //        }
     }
 
-//    override fun onResume() {
-//        super.onResume()
-//        if(!keyguardManager.isDeviceSecure){
-//            if(!settingsDialogFragment.isVisible){
-//                settingsDialogFragment.show(supportFragmentManager, null)
-//            }
-//
-//        }
-//    }
+    /**
+     * Load seed phrases from SharedPreferences
+     * This is not recommended in production applications, it is just for demonstration purposes.
+     */
+    private fun hydrateSharedPreferences(){
+        // Load the stored seed phrases
+        sharedPref.getString("MAIN_ACCOUNT", null)?.let {
+            viewModel.setAccount(Account(it))
+        } ?: run {
+            val account = Account()
+            sharedPref.edit().putString("MAIN_ACCOUNT", account.toMnemonic()).apply()
+            viewModel.setAccount(account)
+        }
+        sharedPref.getString("REKEY_ACCOUNT", null)?.let {
+            viewModel.setRekey(Account(it))
+        } ?: run {
+            val account = Account()
+            sharedPref.edit().putString("REKEY_ACCOUNT", account.toMnemonic()).apply()
+            viewModel.setRekey(account)
+        }
+        sharedPref.getString("SELECTED_ACCOUNT", null)?.let {
+            if(viewModel.rekey.value!!.address.toString() == it){
+                viewModel.setSelected(viewModel.rekey.value!!)
+            } else {
+                viewModel.setSelected(viewModel.account.value!!)
+            }
+        } ?: run {
+            sharedPref.edit().putString("SELECTED_ACCOUNT", viewModel.account.value!!.address.toString()).apply()
+            viewModel.setSelected(viewModel.account.value!!)
+        }
+    }
+
+    /**
+     * Show the Account Settings Fragment
+     */
     private fun toggleAccountDialogFragment(){
         val fragmentManager = supportFragmentManager
         val transaction = fragmentManager.beginTransaction()
@@ -205,11 +246,18 @@ class AnswerActivity : AppCompatActivity() {
             .commit()
     }
 
+    /**
+     * Switch the Activity type
+     */
     private fun handleSwitchActivity(){
         val switchIntent = Intent(this, OfferActivity::class.java)
         switchIntent.setFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
         startActivity(switchIntent)
     }
+
+    /**
+     * Algorand Specific Rekey
+     */
     private fun handleRekey(){
         val result = viewModel.algod.AccountInformation(viewModel.account.value!!.address).execute()
         if(!result.isSuccessful){
@@ -230,17 +278,30 @@ class AnswerActivity : AppCompatActivity() {
             viewModel.rekey(viewModel.account.value!!, viewModel.account.value!!, viewModel.rekey.value!!)
             Toast.makeText(this@AnswerActivity, "Removed Rekey", Toast.LENGTH_LONG).show()
         }
+        sharedPref.edit().putString("SELECTED_ACCOUNT", viewModel.selected.value!!.address.toString()).apply()
     }
+
+    /**
+     * Navigate to the Algorand Dispenser
+     */
     private fun handleOpenDispenser(){
         val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         clipboard.setPrimaryClip(ClipData.newPlainText   ("Address", viewModel.account.value!!.address.toString()))
         val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://bank.testnet.algorand.network"))
         startActivity(browserIntent)
     }
+
+    /**
+     * Navigate to the Account Explorer
+     */
     private fun handleAccountExplorer(){
         val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://testnet.explorer.perawallet.app/address/${viewModel.account.value!!.address}"))
         startActivity(browserIntent)
     }
+
+    /**
+     * Handle Menu Options
+     */
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
          // Handle item selection.
         return when (item.itemId) {
@@ -312,7 +373,8 @@ class AnswerActivity : AppCompatActivity() {
      *
      * Callback for datachannel messages
      */
-    private fun handleMessages(authMessage: AuthMessage, msgStr: String, keyPair: KeyPair){
+    private fun handleMessages(authMessage: AuthMessage, msgStr: String){
+        val keyPair = KeyPairs.getKeyPair(viewModel.selected.value!!.toMnemonic())
         // DataChannel Message Callback
         runOnUiThread {
             Toast.makeText(this@AnswerActivity, msgStr, Toast.LENGTH_SHORT).show()
@@ -447,7 +509,7 @@ class AnswerActivity : AppCompatActivity() {
                 val response = credential.response
                 if (response is AuthenticatorErrorResponse) {
                     if(response.errorCode === ErrorCode.UNKNOWN_ERR){
-                        Toast.makeText(this@AnswerActivity, "Fucked", Toast.LENGTH_LONG).show()
+                        Toast.makeText(this@AnswerActivity, "Something Went Wrong", Toast.LENGTH_LONG).show()
                     } else {
                         Toast.makeText(this@AnswerActivity, response.errorMessage, Toast.LENGTH_LONG).show()
                     }
@@ -485,13 +547,11 @@ class AnswerActivity : AppCompatActivity() {
                                 count = 0,
                             )
                         )
-                        // Get KeyPair for signing
-                        val keyPair = KeyPairs.getKeyPair(account.toMnemonic())
                         // Create P2P Channel
                         val dc = signalClient?.peer(msg.requestId, "answer" )
                         // Handle the DataChannel
                         signalClient?.handleDataChannel(dc!!, {
-                            handleMessages(msg, it, keyPair)
+                            handleMessages(msg, it)
                         }, {
                             Log.d(TAG, "onStateChange($it)")
                             if(it === "OPEN"){
@@ -588,12 +648,11 @@ class AnswerActivity : AppCompatActivity() {
                         }
                         val msg = viewModel.message.value!!
                         val account = viewModel.account.value!!
-                        val keyPair = KeyPairs.getKeyPair(viewModel.selected.value!!.toMnemonic())
                         // Connect to the service then handle state changes and messages
                         val dc = signalClient?.peer(msg.requestId, "answer" )
                         Log.d(TAG, "DataChannel: $dc")
                         signalClient?.handleDataChannel(dc!!, {
-                            handleMessages(msg, it, keyPair)
+                            handleMessages(msg, it)
                         },  {
                             Log.d(TAG, "onStateChange($it)")
                             if(it === "OPEN"){

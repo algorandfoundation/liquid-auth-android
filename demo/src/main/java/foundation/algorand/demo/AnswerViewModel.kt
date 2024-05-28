@@ -21,23 +21,29 @@ import foundation.algorand.demo.credential.db.Credential
 class AnswerViewModel: ViewModel() {
     private val credentialRepository = CredentialRepository()
     // Main Account
-    private val _account = MutableLiveData<Account>().apply {
-        value = Account()
+    private val _account = MutableLiveData<Account?>().apply {
+        value = null
     }
-    val account: LiveData<Account> = _account
+    val account: LiveData<Account?> = _account
+    fun setAccount(account: Account){
+        _account.value = account
+    }
     // Selected Account, defaults to the main account
-    private val _selected = MutableLiveData<Account>().apply {
-        value = _account.value
+    private val _selected = MutableLiveData<Account?>().apply {
+        value = null
     }
-    val selected: LiveData<Account> = _selected
+    val selected: LiveData<Account?> = _selected
     fun setSelected(account: Account){
         _selected.value = account
     }
     // Rekey Account
-    private val _rekey = MutableLiveData<Account>().apply {
-        value = Account()
+    private val _rekey = MutableLiveData<Account?>().apply {
+        value = null
     }
-    val rekey: LiveData<Account> = _rekey
+    val rekey: LiveData<Account?> = _rekey
+    fun setRekey(account: Account){
+        _rekey.value = account
+    }
     private val _session = MutableLiveData<String>().apply {
         value = "Logged Out"
     }
