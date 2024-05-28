@@ -1,4 +1,4 @@
-package foundation.algorand.demo
+package foundation.algorand.demo.crypto
 
 import android.util.Log
 import com.algorand.algosdk.account.Account

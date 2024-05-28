@@ -1,4 +1,4 @@
-package foundation.algorand.demo
+package foundation.algorand.demo.crypto
 import java.security.SecureRandom
 //https://github.com/algorand/java-algorand-sdk/blob/ed90c24a9b4439d3e5df603a04c4658668d119f1/src/main/java/com/algorand/algosdk/account/Account.java#L629
 class FixedSecureRandom(fixedValue: ByteArray) : SecureRandom() {
