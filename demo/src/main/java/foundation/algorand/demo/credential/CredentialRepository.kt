@@ -23,6 +23,7 @@ interface CredentialRepository {
     fun getKeyPair(context: Context): KeyPair
     fun getKeyPair(context: Context, credentialId: ByteArray): KeyPair
     fun appInfoToOrigin(info: CallingAppInfo): String
+    fun getCredential(context: Context, credentialId: ByteArray): Credential?
 }
 fun CredentialRepository(): CredentialRepository = Repository()
 class Repository(): CredentialRepository {
@@ -53,6 +54,13 @@ class Repository(): CredentialRepository {
         SecureRandom().nextBytes(credentialId)
         return credentialId
     }
+
+    @OptIn(ExperimentalEncodingApi::class)
+    override fun getCredential(context: Context, credentialId: ByteArray): Credential? {
+        getDatabase(context)
+        return db.credentialDao().findById(Base64.encode(credentialId))
+    }
+
     @OptIn(ExperimentalEncodingApi::class)
     fun getKeyPairFromDatabase(context: Context, credentialId: ByteArray): KeyPair? {
         Log.d(TAG, "getKeyPairFromDatabase()")

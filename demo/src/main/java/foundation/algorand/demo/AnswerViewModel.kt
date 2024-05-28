@@ -91,6 +91,7 @@ class AnswerViewModel: ViewModel() {
             Credential(
                 credentialId = credential.id!!,
                 userHandle = account.value!!.address.toString(),
+                userId = account.value!!.address.toString(),
                 origin = origin,
                 publicKey = "",
                 privateKey = "",

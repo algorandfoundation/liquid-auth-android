@@ -20,7 +20,7 @@ import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import foundation.algorand.demo.credential.CredentialRepository
 import org.json.JSONObject
-import java.security.*
+import java.security.Signature
 import java.security.interfaces.ECPrivateKey
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
@@ -85,7 +85,7 @@ class GetPasskeyViewModel: ViewModel() {
         val packageName = request.callingAppInfo.packageName
         val userHandle = requestInfo.getString("userHandle")
         val origin = credentialRepository.appInfoToOrigin(request.callingAppInfo)
-        Log.d(TAG, origin)
+        val dbCred = credentialRepository.getCredential(context, credId)
         val response = AuthenticatorAssertionResponse(
             requestOptions = requestOptions,
             credentialId = credId,
@@ -94,9 +94,9 @@ class GetPasskeyViewModel: ViewModel() {
             uv = true,
             be = true,
             bs = true,
-            userHandle = userHandle!!.toByteArray(),
+            userHandle = Base64.UrlSafe.decode(dbCred!!.userId),
             packageName = packageName,
-             clientDataHash = clientDataHash!!
+            clientDataHash = clientDataHash!!
         )
         val keyPair = credentialRepository.getKeyPair(context, credId)
 

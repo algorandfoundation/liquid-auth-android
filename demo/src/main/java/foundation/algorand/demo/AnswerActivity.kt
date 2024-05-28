@@ -541,6 +541,7 @@ class AnswerActivity : AppCompatActivity() {
                             Credential(
                                 credentialId = credential.id!!,
                                 userHandle = account.address.toString(),
+                                userId = account.address.toString(),
                                 origin = msg.origin,
                                 publicKey = "",
                                 privateKey = "",
