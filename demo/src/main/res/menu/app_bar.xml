@@ -1,0 +1,15 @@
+<menu
+        xmlns:android="http://schemas.android.com/apk/res/android"
+        xmlns:app="http://schemas.android.com/apk/res-auto"
+        xmlns:tools="http://schemas.android.com/tools"
+        tools:context=".AnswerActivity"
+>
+
+    <item
+            android:id="@+id/accountButton"
+            android:title="@string/view_account"
+            android:icon="@drawable/baseline_account_balance_wallet_24"
+            android:onClick="onOptionsItemSelected"
+            app:showAsAction="always"
+    />
+</menu>

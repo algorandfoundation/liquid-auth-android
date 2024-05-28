@@ -1,5 +1,6 @@
 package foundation.algorand.demo
 
+import android.content.Context
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
@@ -9,6 +10,8 @@ import com.algorand.algosdk.util.Encoder
 import com.algorand.algosdk.v2.client.common.AlgodClient
 import com.google.android.gms.fido.fido2.api.common.PublicKeyCredential
 import foundation.algorand.auth.connect.AuthMessage
+import foundation.algorand.demo.credential.CredentialRepository
+import foundation.algorand.demo.credential.db.Credential
 
 /**
  * Demo View Model
@@ -16,6 +19,7 @@ import foundation.algorand.auth.connect.AuthMessage
  * Minimal state to handle FIDO2 PublicKeyCredentials and Proof of Knowledge
  */
 class AnswerViewModel: ViewModel() {
+    private val credentialRepository = CredentialRepository()
     // Main Account
     private val _account = MutableLiveData<Account>().apply {
         value = Account()
@@ -75,7 +79,19 @@ class AnswerViewModel: ViewModel() {
     fun setCount(i: Int){
         _count.value = i
     }
-
+    suspend fun saveCredential(context: Context, origin: String, credential: PublicKeyCredential){
+        credentialRepository.saveCredential(
+            context,
+            Credential(
+                credentialId = credential.id!!,
+                userHandle = account.value!!.address.toString(),
+                origin = origin,
+                publicKey = "",
+                privateKey = "",
+                count = 0,
+            )
+        )
+    }
     // Alogrand Rekey
     val algod = AlgodClient("https://testnet-api.algonode.cloud", 443, "")
     fun rekey(sender: Account, rekey: Account, signer: Account? = null){

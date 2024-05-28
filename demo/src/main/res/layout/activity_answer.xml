@@ -3,101 +3,47 @@
     <data>
         <variable name="viewModel" type="foundation.algorand.demo.AnswerViewModel"/>
     </data>
-<androidx.constraintlayout.widget.ConstraintLayout
+    <androidx.coordinatorlayout.widget.CoordinatorLayout
         android:id="@+id/mainLayout"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         tools:context="foundation.algorand.demo.AnswerActivity">
-    <TextView
-            android:text="Answer Client"
-            android:textSize="40sp"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content" android:id="@+id/answerTitle"
-            app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
-    />
-    <Button
-            android:text="Connect"
-            android:layout_width="wrap_content"
+        <com.google.android.material.appbar.AppBarLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content">
+
+            <com.google.android.material.appbar.MaterialToolbar
+                    android:id="@+id/topAppBar"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="?attr/actionBarSize"
+                    app:menu="@menu/app_bar"
+                    app:title="Credentials"
+            />
+
+        </com.google.android.material.appbar.AppBarLayout>
+
+        <ListView
+                android:id="@+id/listView"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:paddingBottom="100dp"
+                android:clipToPadding="false"
+                app:layout_behavior="@string/appbar_scrolling_view_behavior"
+        />
+
+    <com.google.android.material.bottomappbar.BottomAppBar
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:id="@+id/connectButton"
-            app:layout_constraintTop_toBottomOf="@+id/answerTitle"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"/>
-    <Button
-            android:text="Rekey"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:id="@+id/rekeyButton"
-            android:backgroundTint="@color/design_default_color_error"
-            app:layout_constraintTop_toBottomOf="@+id/connectButton"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"/>
-    <TextView
-            android:text="@{@string/wallet(viewModel.selected.address)}"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content" android:id="@+id/walletAddress"
-            app:layout_constraintTop_toBottomOf="@+id/rekeyButton"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
-            android:textIsSelectable="true"
-    />
-    <TextView
-            android:text="@{@string/origin(viewModel.message.origin)}"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content" android:id="@+id/originTextView"
-            app:layout_constraintTop_toBottomOf="@+id/walletAddress"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
-
-    />
-    <TextView
-            android:text="@{@string/session(viewModel.session)}"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content" android:id="@+id/sessionTextView"
-            app:layout_constraintTop_toBottomOf="@+id/originTextView"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
-
-    />
-    <TextView
-            android:text="@{@string/credential(viewModel.credential.id)}"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content" android:id="@+id/credentialTextView"
-            app:layout_constraintTop_toBottomOf="@+id/sessionTextView"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
-
-    />
-    <TextView
-            android:text="@{@string/count(viewModel.count)}"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content" android:id="@+id/credentialCounterTextView"
-            app:layout_constraintTop_toBottomOf="@+id/credentialTextView"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
-
-    />
-    <Button
-            android:text="Switch"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:id="@+id/switchButton"
-            app:layout_constraintBottom_toTopOf="@+id/disconnectButton"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
-    />
-    <Button
-            android:text="Disconnect"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:id="@+id/disconnectButton"
-            android:visibility="invisible"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
-    />
-
-</androidx.constraintlayout.widget.ConstraintLayout>
+            app:menu="@menu/bottom_app_bar"
+            android:layout_gravity="bottom" tools:layout_editor_absoluteX="1dp" android:id="@+id/bottomAppBar"
+            tools:layout_editor_absoluteY="651dp"/>
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:id="@+id/connectButton"
+                app:srcCompat="@drawable/baseline_qr_code_scanner_24"
+                app:layout_anchor="@id/bottomAppBar"
+        />
+</androidx.coordinatorlayout.widget.CoordinatorLayout>
 </layout>

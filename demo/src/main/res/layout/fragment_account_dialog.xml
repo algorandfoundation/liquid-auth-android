@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layout
+        xmlns:app="http://schemas.android.com/apk/res-auto"
+        xmlns:android="http://schemas.android.com/apk/res/android"
+>
+    <data>
+        <variable name="viewModel" type="foundation.algorand.demo.AnswerViewModel"/>
+        <variable name="account" type="com.algorand.algosdk.account.Account"/>
+        <variable name="rekey" type="com.algorand.algosdk.account.Account"/>
+        <variable name="selected" type="com.algorand.algosdk.account.Account"/>
+        <variable name="balance" type="String"/>
+    </data>
+    <LinearLayout
+            android:orientation="vertical"
+            android:layout_width="match_parent"
+            android:background="@color/md_theme_background"
+            android:layout_height="match_parent">
+        <com.google.android.material.appbar.AppBarLayout android:layout_width="match_parent"
+                                                         android:layout_height="wrap_content">
+            <com.google.android.material.appbar.MaterialToolbar android:layout_width="match_parent"
+                                                                android:id="@+id/accountToolbar"
+                                                                android:layout_height="64dp"
+                                                                app:menu="@menu/account_settings_menu"
+                                                                app:title="Account"
+                                                                android:background="@color/md_theme_primaryContainer"
+            >
+            </com.google.android.material.appbar.MaterialToolbar>
+        </com.google.android.material.appbar.AppBarLayout>
+        <TextView
+                android:id="@+id/accountAddress"
+                android:text="@{@string/wallet(account.address)}"
+                android:textIsSelectable="true"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:layout_marginLeft="4dp"
+                android:layout_marginRight="4dp"
+                android:layout_marginBottom="4dp"/>
+        <TextView
+                android:id="@+id/accountBalance"
+                android:text="@{@string/balance(balance)}"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:layout_marginLeft="4dp"
+                android:layout_marginRight="4dp"
+                android:layout_marginBottom="4dp"/>
+        <TextView
+                android:id="@+id/rekeyAccountAddress"
+                android:text="@{@string/rekey(rekey.address)}"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:layout_marginLeft="4dp"
+                android:layout_marginRight="4dp"
+                android:layout_marginBottom="4dp"/>
+        <TextView
+                android:id="@+id/selectedAccountAddress"
+                android:text="@{@string/selected(selected.address)}"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:layout_marginLeft="4dp"
+                android:layout_marginRight="4dp"
+                android:layout_marginBottom="4dp"/>
+    </LinearLayout>
+</layout>

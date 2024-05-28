@@ -2,11 +2,14 @@ package foundation.algorand.demo
 
 import android.content.Intent
 import android.graphics.BitmapFactory
+import android.os.Build
+import android.os.Build.VERSION_CODES
 import android.os.Bundle
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
+import androidx.credentials.CredentialManager
 import androidx.lifecycle.lifecycleScope
 import foundation.algorand.auth.connect.AuthMessage
 import foundation.algorand.auth.connect.SignalClient
@@ -37,14 +40,12 @@ class OfferActivity : AppCompatActivity() {
         .build()
 
     private lateinit var signalClient: SignalClient
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val url = "https://liquid-auth.onrender.com"
         val requestId = SignalClient.generateRequestId()
         signalClient = SignalClient(url, this@OfferActivity, httpClient)
         binding = ActivityOfferBinding.inflate(layoutInflater)
-
         binding.lifecycleOwner = this
         binding.viewModel = viewModel
         binding.switchButton.setOnClickListener {
@@ -52,6 +53,13 @@ class OfferActivity : AppCompatActivity() {
             myIntent.setFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
             startActivity(myIntent)
         }
+        if(Build.VERSION.SDK_INT >= VERSION_CODES.UPSIDE_DOWN_CAKE){
+            binding.configureButton.visibility = android.view.View.VISIBLE
+            binding.configureButton.setOnClickListener {
+                CredentialManager.create(this).createSettingsPendingIntent().send()
+            }
+        }
+
         binding.qrCodeImageView.setImageBitmap(signalClient.qrCode(requestId, BitmapFactory.decodeResource(getResources(), R.mipmap.ic_launcher_round)))
         viewModel.setMessage(AuthMessage(url, requestId))
         lifecycleScope.launch {

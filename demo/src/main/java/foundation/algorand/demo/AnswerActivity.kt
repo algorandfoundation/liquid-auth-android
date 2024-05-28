@@ -1,13 +1,19 @@
 package foundation.algorand.demo
 
 import android.app.Activity
+import android.app.KeyguardManager
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.StrictMode
 import android.util.Log
-import android.view.View
+import android.view.MenuItem
+import android.widget.ArrayAdapter
+import android.widget.ListView
 import android.widget.Toast
 import androidx.activity.result.ActivityResult
 import androidx.activity.result.IntentSenderRequest
@@ -16,12 +22,14 @@ import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
+import androidx.fragment.app.FragmentTransaction
 import androidx.lifecycle.lifecycleScope
 import com.algorand.algosdk.transaction.Transaction
 import com.algorand.algosdk.util.Encoder
 import com.google.android.gms.fido.Fido
 import com.google.android.gms.fido.fido2.Fido2ApiClient
 import com.google.android.gms.fido.fido2.api.common.AuthenticatorErrorResponse
+import com.google.android.gms.fido.fido2.api.common.ErrorCode
 import com.google.android.gms.fido.fido2.api.common.PublicKeyCredential
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanner
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
@@ -29,13 +37,17 @@ import foundation.algorand.auth.Cookie
 import foundation.algorand.auth.connect.AuthMessage
 import foundation.algorand.auth.connect.SignalClient
 import foundation.algorand.auth.crypto.decodeBase64
-import foundation.algorand.auth.fido2.*
+import foundation.algorand.auth.fido2.AssertionApi
+import foundation.algorand.auth.fido2.AttestationApi
+import foundation.algorand.auth.fido2.toPublicKeyCredentialCreationOptions
+import foundation.algorand.auth.fido2.toPublicKeyCredentialRequestOptions
+import foundation.algorand.demo.credential.CredentialRepository
+import foundation.algorand.demo.credential.db.Credential
+import foundation.algorand.demo.credential.db.CredentialDatabase
+import foundation.algorand.demo.crypto.KeyPairs
 import foundation.algorand.demo.databinding.ActivityAnswerBinding
-import java.security.KeyPair
-import java.security.Security
-import java.util.concurrent.Executor
-import kotlin.coroutines.resume
-import kotlin.coroutines.suspendCoroutine
+import foundation.algorand.demo.settings.AccountDialogFragment
+import foundation.algorand.demo.settings.SettingsDialogFragment
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import okhttp3.OkHttpClient
@@ -44,11 +56,18 @@ import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.json.JSONArray
 import org.json.JSONObject
 import ru.gildor.coroutines.okhttp.await
+import java.security.KeyPair
+import java.security.Security
+import java.util.concurrent.Executor
+import kotlin.coroutines.resume
+import kotlin.coroutines.suspendCoroutine
+
 
 class AnswerActivity : AppCompatActivity() {
     companion object {
         private const val TAG = "MainActivity"
     }
+    private lateinit var db: CredentialDatabase
     private val viewModel: AnswerViewModel by viewModels()
     private lateinit var binding: ActivityAnswerBinding
 
@@ -66,7 +85,10 @@ class AnswerActivity : AppCompatActivity() {
     private var signalClient: SignalClient? = null
     private val attestationApi = AttestationApi(httpClient)
     private val assertionApi = AssertionApi(httpClient)
-
+    private val credentialRepository = CredentialRepository()
+    private lateinit var keyguardManager: KeyguardManager
+    private var settingsDialogFragment = SettingsDialogFragment()
+    private lateinit var accountDialogFragment: AccountDialogFragment
     private val userAgent = "${BuildConfig.APPLICATION_ID}/${BuildConfig.VERSION_NAME} " +
             "(Android ${Build.VERSION.RELEASE}; ${Build.MODEL}; ${Build.BRAND})"
 
@@ -100,7 +122,7 @@ class AnswerActivity : AppCompatActivity() {
         fido2Client = Fido2ApiClient(this@AnswerActivity)
         scanner = GmsBarcodeScanning.getClient(this@AnswerActivity)
         executor = ContextCompat.getMainExecutor(this)
-
+        keyguardManager = this@AnswerActivity.getSystemService(KEYGUARD_SERVICE) as KeyguardManager
         // Get Intent Data
         val intentUri: Uri? = intent?.data
         if (intentUri !== null) {
@@ -117,49 +139,134 @@ class AnswerActivity : AppCompatActivity() {
             }
         }
 
+        if(!keyguardManager.isDeviceSecure){
+            if(!settingsDialogFragment.isVisible){
+                settingsDialogFragment.show(supportFragmentManager, "CREATED")
+            }
+
+        }
+        lifecycleScope.launch {
+            db = CredentialDatabase.getInstance(this@AnswerActivity)
+            val credentials = db.credentialDao().getAll()
+            credentials.collect() { credentialList ->
+                Log.d(TAG, "db: $credentialList")
+                val stuff = credentialList.map {
+                    val user = it.userHandle
+                    val origin = it.origin
+                    "$user@$origin"
+                } as MutableList<String>
+                if(stuff.isEmpty()){
+                    stuff.add("No Credentials Found, scan a QR code to register a new credential.")
+                }
+                val listView = findViewById<ListView>(R.id.listView)
+                val adapter: ArrayAdapter<*> = ArrayAdapter<String>(this@AnswerActivity, android.R.layout.simple_list_item_1, android.R.id.text1, stuff)
+                listView.adapter = adapter
+            }
+        }
         // View Bindings
         binding = ActivityAnswerBinding.inflate(layoutInflater)
         binding.lifecycleOwner = this
         setContentView(binding.root)
         binding.viewModel = viewModel
-
+        accountDialogFragment = AccountDialogFragment(viewModel.account.value!!, viewModel.rekey.value!!, viewModel.selected.value!!)
         binding.connectButton.setOnClickListener {
             connect()
         }
-        binding.rekeyButton.setOnClickListener {
-            val result = viewModel.algod.AccountInformation(viewModel.account.value!!.address).execute()
-            if(!result.isSuccessful){
-                Toast.makeText(this@AnswerActivity, "Error getting account information", Toast.LENGTH_LONG).show()
-                return@setOnClickListener
-            }
-            val accountInfo = result.body()
-            if(accountInfo.amount < 1000){
-                Toast.makeText(this@AnswerActivity, "Insufficient Funds", Toast.LENGTH_LONG).show()
-                return@setOnClickListener
-            }
-            // Rekey Main Account to the Rekey Account
-            if(viewModel.account.value!!.address === viewModel.selected.value!!.address){
-                viewModel.rekey(viewModel.account.value!!, viewModel.rekey.value!!)
-                Toast.makeText(this@AnswerActivity, "Rekeyed to ${viewModel.rekey.value!!.address}", Toast.LENGTH_LONG).show()
-            // Rekey back to the Main Account from the Rekey Account
-            } else {
-                viewModel.rekey(viewModel.account.value!!, viewModel.account.value!!, viewModel.rekey.value!!)
-                Toast.makeText(this@AnswerActivity, "Removed Rekey", Toast.LENGTH_LONG).show()
-            }
-        }
 
-        binding.switchButton.setOnClickListener {
-            val myIntent = Intent(this, OfferActivity::class.java)
-            myIntent.setFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
-            startActivity(myIntent)
-        }
-        binding.disconnectButton.setOnClickListener {
-            cookieJar.clear()
-            setSession(null)
-            signalClient?.disconnect()
-        }
+//        if(Build.VERSION.SDK_INT >= VERSION_CODES.UPSIDE_DOWN_CAKE){
+//            binding.configureButton.visibility = android.view.View.VISIBLE
+//            binding.configureButton.setOnClickListener {
+//                CredentialManager.create(this).createSettingsPendingIntent().send()
+//            }
+//        }
+//        binding.disconnectButton.setOnClickListener {
+//            cookieJar.clear()
+//            setSession(null)
+//            signalClient?.disconnect()
+//        }
     }
 
+//    override fun onResume() {
+//        super.onResume()
+//        if(!keyguardManager.isDeviceSecure){
+//            if(!settingsDialogFragment.isVisible){
+//                settingsDialogFragment.show(supportFragmentManager, null)
+//            }
+//
+//        }
+//    }
+    private fun toggleAccountDialogFragment(){
+        val fragmentManager = supportFragmentManager
+        val transaction = fragmentManager.beginTransaction()
+        transaction.setTransition(FragmentTransaction.TRANSIT_FRAGMENT_OPEN)
+        transaction
+            .add(android.R.id.content, accountDialogFragment)
+            .addToBackStack(null)
+            .commit()
+    }
+
+    private fun handleSwitchActivity(){
+        val switchIntent = Intent(this, OfferActivity::class.java)
+        switchIntent.setFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+        startActivity(switchIntent)
+    }
+    private fun handleRekey(){
+        val result = viewModel.algod.AccountInformation(viewModel.account.value!!.address).execute()
+        if(!result.isSuccessful){
+            Toast.makeText(this@AnswerActivity, "Error getting account information", Toast.LENGTH_LONG).show()
+            return
+        }
+        val accountInfo = result.body()
+        if(accountInfo.amount < 1000){
+            Toast.makeText(this@AnswerActivity, "Insufficient Funds", Toast.LENGTH_LONG).show()
+            return
+        }
+        // Rekey Main Account to the Rekey Account
+        if(viewModel.account.value!!.address === viewModel.selected.value!!.address){
+            viewModel.rekey(viewModel.account.value!!, viewModel.rekey.value!!)
+            Toast.makeText(this@AnswerActivity, "Rekeyed to ${viewModel.rekey.value!!.address}", Toast.LENGTH_LONG).show()
+            // Rekey back to the Main Account from the Rekey Account
+        } else {
+            viewModel.rekey(viewModel.account.value!!, viewModel.account.value!!, viewModel.rekey.value!!)
+            Toast.makeText(this@AnswerActivity, "Removed Rekey", Toast.LENGTH_LONG).show()
+        }
+    }
+    private fun handleOpenDispenser(){
+        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.setPrimaryClip(ClipData.newPlainText   ("Address", viewModel.account.value!!.address.toString()))
+        val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://bank.testnet.algorand.network"))
+        startActivity(browserIntent)
+    }
+    private fun handleAccountExplorer(){
+        val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://testnet.explorer.perawallet.app/address/${viewModel.account.value!!.address}"))
+        startActivity(browserIntent)
+    }
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+         // Handle item selection.
+        return when (item.itemId) {
+            R.id.switchButton -> {
+                handleSwitchActivity()
+                true
+            }
+            R.id.rekeyButton -> {
+                handleRekey()
+                true
+            }
+            R.id.accountButton -> {
+                toggleAccountDialogFragment()
+                true
+            }
+            R.id.accountExplorerButton -> {
+                handleAccountExplorer()
+                true
+            }
+            R.id.dispenserButton -> {
+                handleOpenDispenser()
+                true
+            }
+            else -> super.onOptionsItemSelected(item)
+        }
+    }
     /**
      * Transaction Biometric Prompt
      */
@@ -339,8 +446,11 @@ class AnswerActivity : AppCompatActivity() {
                 val credential = PublicKeyCredential.deserializeFromBytes(bytes)
                 val response = credential.response
                 if (response is AuthenticatorErrorResponse) {
-                    Toast.makeText(this@AnswerActivity, response.errorMessage, Toast.LENGTH_LONG)
-                        .show()
+                    if(response.errorCode === ErrorCode.UNKNOWN_ERR){
+                        Toast.makeText(this@AnswerActivity, "Fucked", Toast.LENGTH_LONG).show()
+                    } else {
+                        Toast.makeText(this@AnswerActivity, response.errorMessage, Toast.LENGTH_LONG).show()
+                    }
                 } else {
                     if (signature === null) {
                         Toast.makeText(this@AnswerActivity, "Signature is null", Toast.LENGTH_LONG).show()
@@ -354,7 +464,7 @@ class AnswerActivity : AppCompatActivity() {
                     liquidExtJSON.put("requestId", msg.requestId)
                     liquidExtJSON.put("address", account.address.toString() )
                     liquidExtJSON.put("signature", Base64.encodeBase64URLSafeString(signature!!))
-                    liquidExtJSON.put("device", android.os.Build.MODEL)
+                    liquidExtJSON.put("device", Build.MODEL)
 
                     lifecycleScope.launch {
                         // POST Authenticator Results to FIDO2 API
@@ -364,7 +474,17 @@ class AnswerActivity : AppCompatActivity() {
                             credential,
                             liquidExtJSON
                         ).await()
-
+                        credentialRepository.saveCredential(
+                            this@AnswerActivity,
+                            Credential(
+                                credentialId = credential.id!!,
+                                userHandle = account.address.toString(),
+                                origin = msg.origin,
+                                publicKey = "",
+                                privateKey = "",
+                                count = 0,
+                            )
+                        )
                         // Get KeyPair for signing
                         val keyPair = KeyPairs.getKeyPair(account.toMnemonic())
                         // Create P2P Channel
@@ -378,7 +498,7 @@ class AnswerActivity : AppCompatActivity() {
                                 Log.d(TAG, "Sending Credential")
                                 val credMessage = JSONObject()
                                 credMessage.put("address", account.address.toString())
-                                credMessage.put("device", android.os.Build.MODEL)
+                                credMessage.put("device", Build.MODEL)
                                 credMessage.put("origin", msg.origin)
                                 credMessage.put("id", credential.id)
                                 credMessage.put("prevCounter", 0)
@@ -480,7 +600,7 @@ class AnswerActivity : AppCompatActivity() {
                                 Log.d(TAG, "Sending Credential")
                                 val credMessage = JSONObject()
                                 credMessage.put("address", account.address.toString())
-                                credMessage.put("device", android.os.Build.MODEL)
+                                credMessage.put("device", Build.MODEL)
                                 credMessage.put("origin", msg.origin)
                                 credMessage.put("id", credential.id)
                                 credMessage.put("prevCounter", viewModel.count.value!!)
@@ -502,12 +622,12 @@ class AnswerActivity : AppCompatActivity() {
         if (s === null) {
             viewModel.setSession("Logged Out")
             viewModel.setMessage(null)
-            binding.disconnectButton.visibility = View.INVISIBLE
-            binding.connectButton.visibility = View.VISIBLE
+//            binding.disconnectButton.visibility = View.INVISIBLE
+//            binding.connectButton.visibility = View.VISIBLE
         } else {
             viewModel.setSession(s)
-            binding.disconnectButton.visibility = View.VISIBLE
-            binding.connectButton.visibility = View.INVISIBLE
+//            binding.disconnectButton.visibility = View.VISIBLE
+//            binding.connectButton.visibility = View.INVISIBLE
         }
     }
 }
