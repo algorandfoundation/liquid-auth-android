@@ -12,6 +12,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.StrictMode
 import android.util.Log
+import android.view.Menu
 import android.view.MenuItem
 import android.widget.ArrayAdapter
 import android.widget.ListView
@@ -140,10 +141,11 @@ class AnswerActivity : AppCompatActivity() {
             viewModel.setMessage(msg)
             signalClient = SignalClient(msg.origin, this@AnswerActivity, httpClient)
             lifecycleScope.launch {
-                if (viewModel.credential.value === null) {
+                val savedCredential = credentialRepository.getCredentialByOrigin(this@AnswerActivity, msg.origin)
+                if (savedCredential === null) {
                     register(msg)
                 } else {
-                    authenticate(msg, viewModel.credential.value!!)
+                    authenticate(msg, savedCredential)
                 }
             }
         }
@@ -433,11 +435,12 @@ class AnswerActivity : AppCompatActivity() {
                     viewModel.setMessage(msg)
                     // Connect to Service
                     lifecycleScope.launch {
+                        val savedCredential = credentialRepository.getCredentialByOrigin(this@AnswerActivity, msg.origin)
                         signalClient = SignalClient(msg.origin, this@AnswerActivity, httpClient)
-                        if (viewModel.credential.value === null) {
+                        if (savedCredential === null) {
                             register(msg)
                         } else {
-                            authenticate(msg, viewModel.credential.value!!)
+                            authenticate(msg, savedCredential)
                         }
                     }
                 }
@@ -567,8 +570,6 @@ class AnswerActivity : AppCompatActivity() {
                                 signalClient!!.peerClient!!.send(credMessage.toString())
                             }
                         })
-                        // Update Render/State
-                        viewModel.setCredential(credential)
                         Toast.makeText(this@AnswerActivity, "Registered Credentials!", Toast.LENGTH_LONG).show()
                     }
 
@@ -583,11 +584,11 @@ class AnswerActivity : AppCompatActivity() {
      * Receives PublicKeyCredentialRequestOptions from the FIDO2 Server and launches
      * the authenticator Intent using the handleAuthenticatorAssertionResult Handler
      */
-    private suspend fun authenticate(msg: AuthMessage, credential: PublicKeyCredential) {
+    private suspend fun authenticate(msg: AuthMessage, credential: Credential) {
         val response = assertionApi.postAssertionOptions(
             msg.origin,
             userAgent,
-            credential.id!!
+            credential.credentialId
         ).await()
         val session = Cookie.fromResponse(response)
         session?.let {
@@ -682,12 +683,8 @@ class AnswerActivity : AppCompatActivity() {
         if (s === null) {
             viewModel.setSession("Logged Out")
             viewModel.setMessage(null)
-//            binding.disconnectButton.visibility = View.INVISIBLE
-//            binding.connectButton.visibility = View.VISIBLE
         } else {
             viewModel.setSession(s)
-//            binding.disconnectButton.visibility = View.VISIBLE
-//            binding.connectButton.visibility = View.INVISIBLE
         }
     }
 }

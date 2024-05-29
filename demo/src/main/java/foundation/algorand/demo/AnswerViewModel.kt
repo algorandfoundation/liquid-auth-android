@@ -65,17 +65,6 @@ class AnswerViewModel: ViewModel() {
         _message.value = msg
     }
 
-
-    private val _credential = MutableLiveData<PublicKeyCredential?>().apply {
-        value = null
-    }
-
-    val credential: LiveData<PublicKeyCredential?> = _credential
-
-    fun setCredential(cred: PublicKeyCredential?){
-        _credential.value = cred
-    }
-
     private val _count = MutableLiveData<Int>().apply {
         value = 0
     }

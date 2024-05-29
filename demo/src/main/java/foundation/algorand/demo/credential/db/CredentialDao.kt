@@ -16,7 +16,8 @@ interface CredentialDao {
     fun loadAllByIds(credentialIds: List<String>): List<Credential>
     @Query("SELECT * FROM credential WHERE credentialId LIKE :credentialId LIMIT 1")
     fun findById(credentialId: String): Credential?
-
+    @Query("SELECT * FROM credential WHERE origin LIKE :origin LIMIT 1")
+    fun findByOrigin(origin: String): Credential?
     @Query("SELECT * FROM credential WHERE userHandle LIKE :userHandle LIMIT 1")
     fun findByUser(userHandle: String): Credential
 

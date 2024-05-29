@@ -24,6 +24,7 @@ interface CredentialRepository {
     fun getKeyPair(context: Context, credentialId: ByteArray): KeyPair
     fun appInfoToOrigin(info: CallingAppInfo): String
     fun getCredential(context: Context, credentialId: ByteArray): Credential?
+    fun getCredentialByOrigin(context: Context, origin: String): Credential?
 }
 fun CredentialRepository(): CredentialRepository = Repository()
 class Repository(): CredentialRepository {
@@ -59,6 +60,10 @@ class Repository(): CredentialRepository {
     override fun getCredential(context: Context, credentialId: ByteArray): Credential? {
         getDatabase(context)
         return db.credentialDao().findById(Base64.encode(credentialId))
+    }
+    override fun getCredentialByOrigin(context: Context, origin: String): Credential? {
+        getDatabase(context)
+        return db.credentialDao().findByOrigin(origin)
     }
 
     @OptIn(ExperimentalEncodingApi::class)
