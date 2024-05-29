@@ -2,14 +2,12 @@ package foundation.algorand.demo
 
 import android.content.Intent
 import android.graphics.BitmapFactory
-import android.os.Build
-import android.os.Build.VERSION_CODES
 import android.os.Bundle
 import android.util.Log
+import android.view.MenuItem
 import android.widget.Toast
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
-import androidx.credentials.CredentialManager
 import androidx.lifecycle.lifecycleScope
 import foundation.algorand.auth.connect.AuthMessage
 import foundation.algorand.auth.connect.SignalClient
@@ -48,17 +46,6 @@ class OfferActivity : AppCompatActivity() {
         binding = ActivityOfferBinding.inflate(layoutInflater)
         binding.lifecycleOwner = this
         binding.viewModel = viewModel
-        binding.switchButton.setOnClickListener {
-            val myIntent = Intent(this, AnswerActivity::class.java)
-            myIntent.setFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
-            startActivity(myIntent)
-        }
-        if(Build.VERSION.SDK_INT >= VERSION_CODES.UPSIDE_DOWN_CAKE){
-            binding.configureButton.visibility = android.view.View.VISIBLE
-            binding.configureButton.setOnClickListener {
-                CredentialManager.create(this).createSettingsPendingIntent().send()
-            }
-        }
 
         binding.qrCodeImageView.setImageBitmap(signalClient.qrCode(requestId, BitmapFactory.decodeResource(getResources(), R.mipmap.ic_launcher_round)))
         viewModel.setMessage(AuthMessage(url, requestId))
@@ -83,5 +70,26 @@ class OfferActivity : AppCompatActivity() {
             })
         }
         setContentView(binding.root)
+    }
+    /**
+     * Switch the Activity type
+     */
+    private fun handleSwitchActivity(){
+        val switchIntent = Intent(this, AnswerActivity::class.java)
+        switchIntent.setFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+        startActivity(switchIntent)
+    }
+    /**
+     * Handle Menu Options
+     */
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        // Handle item selection.
+        return when (item.itemId) {
+            R.id.switchButton -> {
+                handleSwitchActivity()
+                true
+            }
+            else -> super.onOptionsItemSelected(item)
+        }
     }
 }
