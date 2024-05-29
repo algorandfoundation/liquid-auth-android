@@ -38,6 +38,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: './app/build/outputs/apk/debug/app-debug.apk'
+          asset_path: './demo/build/outputs/apk/debug/demo-debug.apk'
           asset_name: fido2-debug.apk
           asset_content_type: application/vnd.android.package-archive
