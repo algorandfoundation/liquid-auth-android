@@ -1,0 +1,15 @@
+<menu
+        xmlns:android="http://schemas.android.com/apk/res/android"
+        xmlns:app="http://schemas.android.com/apk/res-auto"
+        xmlns:tools="http://schemas.android.com/tools"
+        tools:context=".AnswerActivity"
+>
+
+    <item
+            android:id="@+id/switchButton"
+            android:icon="@drawable/baseline_flip_24"
+            android:title="@string/switch_view"
+            android:onClick="onOptionsItemSelected"
+            app:showAsAction="always"
+    />
+</menu>

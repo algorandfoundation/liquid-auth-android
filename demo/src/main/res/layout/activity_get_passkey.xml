@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layout xmlns:tools="http://schemas.android.com/tools" xmlns:app="http://schemas.android.com/apk/res-auto" xmlns:android="http://schemas.android.com/apk/res/android">
+    <data>
+        <variable name="viewModel" type="foundation.algorand.demo.headless.GetPasskeyViewModel"/>
+    </data>
+<androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/container"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        tools:context=".headless.GetPasskeyActivity"
+>
+
+    <TextView
+            android:id="@+id/get_passkey_message"
+            android:text="@string/get_passkey_message"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:layout_marginTop="8dp"
+            android:layout_marginEnd="8dp"
+            android:textAlignment="center"
+            android:textSize="20sp"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
+    <TextView
+            android:id="@+id/get_passkey_origin"
+            android:text="@{@string/origin(viewModel.origin)}"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:layout_marginEnd="8dp"
+            android:textAlignment="center"
+            android:textSize="20sp"
+            app:layout_constraintTop_toBottomOf="@+id/get_passkey_message"/>
+    <TextView
+            android:id="@+id/get_passkey_calling_app"
+            android:text="@{@string/calling_app(viewModel.callingApp)}"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:layout_marginEnd="8dp"
+            android:textAlignment="center"
+            android:textSize="20sp"
+            app:layout_constraintTop_toBottomOf="@+id/get_passkey_origin"/>
+    <TextView
+            android:id="@+id/get_passkey_requestJson"
+            android:text="@{viewModel.requestJson}"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:layout_marginStart="8dp"
+            android:layout_marginEnd="8dp"
+            android:textSize="20sp"
+            app:layout_constraintTop_toBottomOf="@+id/get_passkey_calling_app"/>
+</androidx.constraintlayout.widget.ConstraintLayout>
+</layout>

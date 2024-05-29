@@ -19,5 +19,5 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "foundation.algorand.demo"
-include(":app")
-include(":auth")
+include(":demo")
+include(":liquid")
