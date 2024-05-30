@@ -63,7 +63,7 @@ import java.security.Security
 import java.util.concurrent.Executor
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
-
+import org.webrtc.PeerConnection
 
 class AnswerActivity : AppCompatActivity() {
     companion object {
@@ -74,6 +74,14 @@ class AnswerActivity : AppCompatActivity() {
     private lateinit var binding: ActivityAnswerBinding
 
     private val cookieJar = Cookies()
+
+    private val iceServers = listOf(
+        PeerConnection.IceServer.builder("stun:stun.relay.metered.ca:80").createIceServer(),
+        PeerConnection.IceServer.builder("turn:global.relay.metered.ca:80").setUsername("fc7708976bf5d60be20c5a1d").setPassword("sVpEREQGGhXOw4gX").createIceServer(),
+        PeerConnection.IceServer.builder("turn:global.relay.metered.ca:80?transport=tcp").setUsername("fc7708976bf5d60be20c5a1d").setPassword("sVpEREQGGhXOw4gX").createIceServer(),
+        PeerConnection.IceServer.builder("turn:global.relay.metered.ca:443").setUsername("fc7708976bf5d60be20c5a1d").setPassword("sVpEREQGGhXOw4gX").createIceServer(),
+        PeerConnection.IceServer.builder("turns:global.relay.metered.ca:443?transport=tcp").setUsername("fc7708976bf5d60be20c5a1d").setPassword("sVpEREQGGhXOw4gX").createIceServer()
+    )
 
     // Third Party APIs
     private var httpClient = OkHttpClient.Builder()
@@ -552,7 +560,7 @@ class AnswerActivity : AppCompatActivity() {
                             )
                         )
                         // Create P2P Channel
-                        val dc = signalClient?.peer(msg.requestId, "answer" )
+                        val dc = signalClient?.peer(msg.requestId, "answer", iceServers)
                         // Handle the DataChannel
                         signalClient?.handleDataChannel(dc!!, {
                             handleMessages(msg, it)
@@ -651,7 +659,7 @@ class AnswerActivity : AppCompatActivity() {
                         val msg = viewModel.message.value!!
                         val account = viewModel.account.value!!
                         // Connect to the service then handle state changes and messages
-                        val dc = signalClient?.peer(msg.requestId, "answer" )
+                        val dc = signalClient?.peer(msg.requestId, "answer", iceServers)
                         Log.d(TAG, "DataChannel: $dc")
                         signalClient?.handleDataChannel(dc!!, {
                             handleMessages(msg, it)
