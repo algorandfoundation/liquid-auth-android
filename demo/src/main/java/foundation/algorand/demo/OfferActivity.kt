@@ -33,7 +33,9 @@ class OfferActivity : AppCompatActivity() {
     private val cookieJar = Cookies()
 
     private val iceServers = listOf(
-        PeerConnection.IceServer.builder("stun:stun.relay.metered.ca:80").createIceServer(),
+        PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer(),
+        PeerConnection.IceServer.builder("stun:stun1.l.google.com:19302").createIceServer(),
+        PeerConnection.IceServer.builder("stun:stun2.l.google.com:19302").createIceServer(),
         PeerConnection.IceServer.builder("turn:global.relay.metered.ca:80").setUsername("fc7708976bf5d60be20c5a1d").setPassword("sVpEREQGGhXOw4gX").createIceServer(),
         PeerConnection.IceServer.builder("turn:global.relay.metered.ca:80?transport=tcp").setUsername("fc7708976bf5d60be20c5a1d").setPassword("sVpEREQGGhXOw4gX").createIceServer(),
         PeerConnection.IceServer.builder("turn:global.relay.metered.ca:443").setUsername("fc7708976bf5d60be20c5a1d").setPassword("sVpEREQGGhXOw4gX").createIceServer(),
