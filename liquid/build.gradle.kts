@@ -3,6 +3,7 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.kapt")
     id("dagger.hilt.android.plugin")
+    `maven-publish`
 }
 
 android {
@@ -23,17 +24,33 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
     buildFeatures {
         buildConfig = true
     }
     kotlinOptions {
-        jvmTarget = "1.8"
+        jvmTarget = "17"
     }
 }
 
+publishing {
+    repositories {
+        maven {
+            url = uri("https://github.com/algorandfoundation/liquid-auth-android")
+        }
+    }
+    publications {
+        register<MavenPublication>("release") {
+            groupId = "foundation.algorand"
+            artifactId = "auth"
+            afterEvaluate {
+                from(components["release"])
+            }
+        }
+    }
+}
 dependencies {
     // AlgoSDK
     implementation("com.algorand:algosdk:2.4.0")

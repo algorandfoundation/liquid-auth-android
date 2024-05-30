@@ -1,0 +1,35 @@
+{
+  "plugins": [
+    "@semantic-release/commit-analyzer",
+    "@semantic-release/release-notes-generator",
+    "@semantic-release/changelog",
+    [
+      "@semantic-release/git",
+      {
+        "assets": [
+          "CHANGELOG.md"
+        ],
+        "message": "chore(release): [skip ci] Liquid Auth \n\n${nextRelease.notes}"
+      }
+    ],
+    [
+      "@semantic-release/github",
+      {
+        "successComment": false,
+        "assets": [
+          {
+            "path": "./demo/build/outputs/apk/debug/demo-debug.apk",
+            "label": "fido2-debug.apk"
+          }
+        ]
+      }
+    ]
+  ],
+  "branches": [
+    "release/*",
+    {
+      "name": "develop",
+      "prerelease": "canary"
+    }
+  ]
+}
