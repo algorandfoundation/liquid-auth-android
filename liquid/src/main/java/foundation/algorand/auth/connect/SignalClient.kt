@@ -12,6 +12,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import org.json.JSONObject
+import org.webrtc.PeerConnection
 import org.webrtc.DataChannel
 import org.webrtc.IceCandidate
 import org.webrtc.SessionDescription
@@ -92,7 +93,7 @@ class SignalClient @Inject constructor(
      *
      * The type parameter is used to specify the type of remote peer
      */
-    override suspend fun peer(requestId: Double, type: String): DataChannel? {
+    override suspend fun peer(requestId: Double, type: String, iceServers: List<PeerConnection.IceServer>?): DataChannel? {
         createSocket()
         return suspendCoroutine { continuation ->
             scope.launch {
@@ -122,23 +123,25 @@ class SignalClient @Inject constructor(
                 peerClient!!.createPeerConnection(
                     // Handle Local ICECandidates
                     { iceCandidate ->
-                    Log.d(
-                        TAG,
-                        "onIce${clientType.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() }}Candidate(${iceCandidate.toJSON()})"
-                    )
-                    // Send Local ICECandidates to Peer
-                    socket?.emit("${clientType}-candidate", iceCandidate.toJSON())
-                }, {
-                    // Handle a Data Channel from the Peer
-                    // This only happens for a client that creates an Answer,
-                    // Offer clients are responsible for creating a datachannel
-                    continuation.resume(it)
-                })
+                        Log.d(
+                            TAG,
+                            "onIce${clientType.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() }}Candidate(${iceCandidate.toJSON()})"
+                        )
+                        // Send Local ICECandidates to Peer
+                        socket?.emit("${clientType}-candidate", iceCandidate.toJSON())
+                    },{
+                        // Handle a Data Channel from the Peer
+                        // This only happens for a client that creates an Answer,
+                        // Offer clients are responsible for creating a datachannel
+                        continuation.resume(it)
+                    },
+                    iceServers
+                )
 
                 // Wait for Offer, then create Answer
                 if (type === "offer") {
                     val sdp = signal(type)
-                    Log.d(TAG, "Recieved the SDP!(${sdp})")
+                     Log.d(TAG, "Recieved the SDP!(${sdp})")
                     peerClient?.setRemoteDescription(sdp)
                     Log.d(TAG, "Set the SDP!(${sdp})")
                     if(candidatesBuffer.isNotEmpty()){

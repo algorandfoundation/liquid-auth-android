@@ -15,7 +15,7 @@ import foundation.algorand.demo.databinding.ActivityOfferBinding
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import org.json.JSONObject
-
+import org.webrtc.PeerConnection
 
 /**
  * Offer Activity
@@ -31,6 +31,16 @@ class OfferActivity : AppCompatActivity() {
     private lateinit var binding: ActivityOfferBinding
 
     private val cookieJar = Cookies()
+
+    private val iceServers = listOf(
+        PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer(),
+        PeerConnection.IceServer.builder("stun:stun1.l.google.com:19302").createIceServer(),
+        PeerConnection.IceServer.builder("stun:stun2.l.google.com:19302").createIceServer(),
+        PeerConnection.IceServer.builder("turn:global.relay.metered.ca:80").setUsername("fc7708976bf5d60be20c5a1d").setPassword("sVpEREQGGhXOw4gX").createIceServer(),
+        PeerConnection.IceServer.builder("turn:global.relay.metered.ca:80?transport=tcp").setUsername("fc7708976bf5d60be20c5a1d").setPassword("sVpEREQGGhXOw4gX").createIceServer(),
+        PeerConnection.IceServer.builder("turn:global.relay.metered.ca:443").setUsername("fc7708976bf5d60be20c5a1d").setPassword("sVpEREQGGhXOw4gX").createIceServer(),
+        PeerConnection.IceServer.builder("turns:global.relay.metered.ca:443?transport=tcp").setUsername("fc7708976bf5d60be20c5a1d").setPassword("sVpEREQGGhXOw4gX").createIceServer()
+    )
 
     // Third Party APIs
     private var httpClient = OkHttpClient.Builder()
@@ -50,7 +60,7 @@ class OfferActivity : AppCompatActivity() {
         binding.qrCodeImageView.setImageBitmap(signalClient.qrCode(requestId, BitmapFactory.decodeResource(getResources(), R.mipmap.ic_launcher_round)))
         viewModel.setMessage(AuthMessage(url, requestId))
         lifecycleScope.launch {
-            val dc = signalClient.peer(requestId, "offer")
+            val dc = signalClient.peer(requestId, "offer", iceServers)
             Log.d(TAG, "Data Channel: $dc")
             signalClient.handleDataChannel(dc!!, {
                 // TODO: AVM Provider Handler
