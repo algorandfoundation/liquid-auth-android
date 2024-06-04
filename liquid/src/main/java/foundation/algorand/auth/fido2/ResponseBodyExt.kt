@@ -5,7 +5,6 @@ import android.util.Log
 import com.google.android.gms.fido.fido2.api.common.*
 import foundation.algorand.auth.crypto.decodeBase64
 import okhttp3.ResponseBody
-import org.json.JSONObject
 
 @Deprecated("Use the new CredentialManager API")
 fun ResponseBody.toPublicKeyCredentialRequestOptions(): PublicKeyCredentialRequestOptions{

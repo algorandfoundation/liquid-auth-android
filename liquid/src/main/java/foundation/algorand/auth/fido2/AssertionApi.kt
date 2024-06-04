@@ -13,9 +13,27 @@ import org.json.JSONObject
 import javax.inject.Inject
 
 class AssertionApi @Inject constructor(
-    private val client: OkHttpClient
+    val client: OkHttpClient
 ) {
+    fun postAssertionOptionsRequest(
+        origin: String,
+        userAgent: String,
+        credentialId: String,
+        liquidExt: Boolean? = true
+    ): Request {
+        val payload = JSONObject()
+        if(liquidExt == true) {
+            payload.put("extensions", liquidExt)
+        }
+        val path = "$origin/assertion/request/$credentialId"
+        return Request.Builder()
+            .url(path)
+            .method("POST", JSONObject().toString().toRequestBody("application/json".toMediaTypeOrNull()))
+            .addHeader("User-Agent", userAgent)
+            .build()
+    }
     /**
+     * @deprecated("Use postAssertionOptionsRequest instead")
      */
     fun postAssertionOptions(
         origin: String,
@@ -23,28 +41,15 @@ class AssertionApi @Inject constructor(
         credentialId: String,
         liquidExt: Boolean? = true
     ): Call {
-        val payload = JSONObject()
-        if(liquidExt == true) {
-            payload.put("extensions", liquidExt)
-        }
-        val path = "$origin/assertion/request/$credentialId"
-        val requestBuilder = Request.Builder()
-            .url(path)
-            .method("POST", JSONObject().toString().toRequestBody("application/json".toMediaTypeOrNull()))
-            .addHeader("User-Agent", userAgent)
-        return client.newCall(
-            requestBuilder.build()
-        )
+        return client.newCall(postAssertionOptionsRequest(origin, userAgent, credentialId, liquidExt))
     }
 
-    /**
-     */
-    fun postAssertionResult(
+    fun postAssertionResultRequest(
         origin: String,
         userAgent: String,
         credential: PublicKeyCredential,
         liquidExt: JSONObject?
-    ): Call {
+    ): Request {
         val rawId = credential.rawId!!.toBase64()
         val response = credential.response as AuthenticatorAssertionResponse
 
@@ -64,13 +69,20 @@ class AssertionApi @Inject constructor(
         jsonResponse.put("userHandle", response.userHandle?.toBase64())
 
         payload.put("response", jsonResponse)
-        val builder = Request.Builder()
+        return Request.Builder()
             .url("$origin/assertion/response")
             .addHeader("User-Agent", userAgent)
             .method("POST", payload.toString().toRequestBody("application/json".toMediaTypeOrNull()))
-
-       return client.newCall(
-            builder.build()
-        )
+            .build()
+    }
+    /**
+     */
+    fun postAssertionResult(
+        origin: String,
+        userAgent: String,
+        credential: PublicKeyCredential,
+        liquidExt: JSONObject?
+    ): Call {
+       return client.newCall(postAssertionResultRequest(origin, userAgent, credential, liquidExt))
     }
 }

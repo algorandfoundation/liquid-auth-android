@@ -1,6 +1,5 @@
 package foundation.algorand.auth.connect
 
-import android.R.attr.bitmap
 import android.content.Context
 import android.graphics.Bitmap
 import android.util.Log
@@ -32,7 +31,7 @@ import kotlin.coroutines.suspendCoroutine
  * - Offer: Create a Peer Offer
  * - Answer: Create a Peer Answer
  */
-class SignalClient @Inject constructor(
+open class SignalClient @Inject constructor(
     /**
      * Origin of the Service
      */
@@ -237,7 +236,7 @@ class SignalClient @Inject constructor(
         }
     }
 
-    private fun createSocket() {
+    open fun createSocket() {
         // Handle existing connections
         if (socket !== null) {
             socket?.close()

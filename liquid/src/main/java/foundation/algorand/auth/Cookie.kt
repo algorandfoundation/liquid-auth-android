@@ -11,9 +11,6 @@ class Cookie {
             val cookie = response.headers("set-cookie").find { it.startsWith(SESSION_KEY) }
             return cookie
         }
-        fun format(sessionId: String): String {
-            return "$SESSION_KEY$sessionId"
-        }
         fun getID(cookie: String): String {
             return cookie.substringAfter("${SESSION_KEY}s%3A").substringBefore(".")
         }

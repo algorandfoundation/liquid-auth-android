@@ -31,8 +31,22 @@ import javax.inject.Inject
  * is then submitted and verified on the FIDO2 service
  */
 class AttestationApi @Inject constructor(
-    private val client: OkHttpClient
+    val client: OkHttpClient
 ) {
+    fun postAttestationOptionsRequest(
+        origin: String,
+        userAgent: String,
+        options: JSONObject = JSONObject()
+    ): Request {
+        val path = "$origin/attestation/request"
+        val body = options.toString().toRequestBody("application/json".toMediaTypeOrNull())
+        return Request.Builder()
+            .url(path)
+            .addHeader("User-Agent", userAgent)
+            .method("POST", body)
+            .build()
+    }
+
     /**
      * POST request to retrieve PublicKeyCredentialCreationOptions
      *
@@ -46,15 +60,42 @@ class AttestationApi @Inject constructor(
         userAgent: String,
         options: JSONObject = JSONObject()
     ): Call {
-        val path = "$origin/attestation/request"
-        val body = options.toString().toRequestBody("application/json".toMediaTypeOrNull())
         return client.newCall(
-            Request.Builder()
-                .url(path)
-                .addHeader("User-Agent", userAgent)
-                .method("POST", body)
-                .build()
+            postAttestationOptionsRequest(origin, userAgent, options)
         )
+    }
+
+    fun postAttestationResultRequest(
+        origin: String,
+        userAgent: String,
+        credential: PublicKeyCredential,
+        liquidExt: JSONObject? = null
+    ): Request {
+        val path = "$origin/attestation/response"
+        val rawId = credential.rawId!!.toBase64()
+        val response = credential.response as AuthenticatorAttestationResponse
+
+        val payload = JSONObject()
+        payload.put("id", rawId)
+        payload.put("type", "${PublicKeyCredentialType.PUBLIC_KEY}")
+        payload.put("rawId", rawId)
+        if (liquidExt != null) {
+            val clientExtensionResults = JSONObject()
+            clientExtensionResults.put("liquid", liquidExt)
+            payload.put("clientExtensionResults", clientExtensionResults)
+        }
+        val jsonResponse = JSONObject()
+        jsonResponse.put("clientDataJSON", response.clientDataJSON.toBase64())
+        jsonResponse.put("attestationObject", response.attestationObject.toBase64())
+        payload.put("response", jsonResponse)
+
+        payload.put("device", android.os.Build.MODEL)
+        val requestBody = payload.toString().toRequestBody("application/json".toMediaTypeOrNull())
+        return Request.Builder()
+            .url(path)
+            .addHeader("User-Agent", userAgent)
+            .method("POST", requestBody)
+            .build()
     }
 
     /**
@@ -71,32 +112,8 @@ class AttestationApi @Inject constructor(
         credential: PublicKeyCredential,
         liquidExt: JSONObject? = null
     ): Call {
-        val path = "$origin/attestation/response"
-        val rawId = credential.rawId!!.toBase64()
-        val response = credential.response as AuthenticatorAttestationResponse
-
-        val payload = JSONObject()
-        payload.put("id", rawId)
-        payload.put("type", "${PublicKeyCredentialType.PUBLIC_KEY}")
-        payload.put("rawId", rawId)
-        if(liquidExt != null) {
-            val clientExtensionResults = JSONObject()
-            clientExtensionResults.put("liquid", liquidExt)
-            payload.put("clientExtensionResults", clientExtensionResults)
-        }
-        val jsonResponse = JSONObject()
-        jsonResponse.put("clientDataJSON", response.clientDataJSON.toBase64())
-        jsonResponse.put("attestationObject", response.attestationObject.toBase64())
-        payload.put("response", jsonResponse)
-
-        payload.put("device", android.os.Build.MODEL)
-        val requestBody = payload.toString().toRequestBody("application/json".toMediaTypeOrNull())
         return client.newCall(
-            Request.Builder()
-                .url(path)
-                .addHeader("User-Agent", userAgent)
-                .method("POST", requestBody)
-                .build()
+            postAttestationResultRequest(origin, userAgent, credential, liquidExt)
         )
     }
 }
