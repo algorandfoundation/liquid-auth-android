@@ -1,3 +1,6 @@
+val TURN_USERNAME: String = "fc7708976bf5d60be20c5a1d"
+val TURN_CREDENTIAL: String = "sVpEREQGGhXOw4gX"
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -19,6 +22,9 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
+
+        buildConfigField("String", "TURN_USERNAME", "\"$TURN_USERNAME\"")
+        buildConfigField("String", "TURN_CREDENTIAL", "\"$TURN_CREDENTIAL\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         resValue(
