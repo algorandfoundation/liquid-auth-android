@@ -57,7 +57,15 @@ class OfferActivity : AppCompatActivity() {
         binding.lifecycleOwner = this
         binding.viewModel = viewModel
 
-        binding.qrCodeImageView.setImageBitmap(signalClient.qrCode(requestId, BitmapFactory.decodeResource(getResources(), R.mipmap.ic_launcher_round)))
+        binding.qrCodeImageView.setImageBitmap(
+            signalClient.qrCode(
+                requestId,
+                BitmapFactory.decodeResource(getResources(), R.mipmap.ic_launcher_round),
+                null,
+                "#${resources.getString(0+R.color.md_theme_primary).substring(3)}",
+                "#${resources.getString(0+R.color.md_theme_background).substring(3)}"
+            )
+        )
         viewModel.setMessage(AuthMessage(url, requestId))
         lifecycleScope.launch {
             val dc = signalClient.peer(requestId, "offer", iceServers)

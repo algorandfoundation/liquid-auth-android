@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.provider.Settings
 import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.DialogFragment
+import foundation.algorand.demo.R
 
 
 /**
@@ -17,7 +18,7 @@ class SettingsDialogFragment : DialogFragment() {
             val builder = AlertDialog.Builder(it)
             builder
                 .setMessage("Device is not secure, please enter a PIN or Fingerprint to continue.")
-                .setIcon(android.R.drawable.ic_dialog_alert)
+                .setIcon(R.drawable.baseline_warning_24)
                 .setTitle("Warning")
                 .setPositiveButton("Settings") { dialog, id ->
                     startActivity(Intent(Settings.ACTION_SECURITY_SETTINGS))

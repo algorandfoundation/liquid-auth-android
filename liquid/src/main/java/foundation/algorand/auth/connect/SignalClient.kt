@@ -69,15 +69,21 @@ class SignalClient @Inject constructor(
     /**
      * Generate a QR Code
      */
-    override fun qrCode(requestId: Double, logo: Bitmap?, logoSize: Int?): Bitmap {
+    override fun qrCode(
+        requestId: Double,
+        logo: Bitmap?,
+        logoSize: Int?,
+        color: String?,
+        backgroundColor: String?,
+        ): Bitmap {
         val size = logoSize ?: 200
         val scaledLogo = logo?.let { Bitmap.createScaledBitmap(it, size, size, false) }
         val stream = ByteArrayOutputStream()
         scaledLogo?.compress(Bitmap.CompressFormat.PNG, 100, stream)
         val data = "liquid://${url.replace("https://", "")}/?requestId=$requestId"
         val image = QRCode.ofSquares()
-            .withColor(Colors.css("#9966FF"))
-            .withBackgroundColor(Colors.css("#15121B"))
+            .withColor(Colors.css(color ?: "#9966FF"))
+            .withBackgroundColor(Colors.css(backgroundColor ?: "#15121B"))
             .withLogo(stream.toByteArray(), size, size)
             .build(data)
             .render()
