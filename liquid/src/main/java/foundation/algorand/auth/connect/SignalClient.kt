@@ -1,9 +1,10 @@
 package foundation.algorand.auth.connect
 
-import android.R.attr.bitmap
 import android.content.Context
 import android.graphics.Bitmap
 import android.util.Log
+import foundation.algorand.auth.util.Event
+import foundation.algorand.auth.util.EventEmitter
 import io.socket.client.Ack
 import io.socket.client.IO
 import io.socket.client.Socket
@@ -45,7 +46,7 @@ class SignalClient @Inject constructor(
      * HTTP Client
      */
     override val client: OkHttpClient,
-) : SignalInterface {
+) : EventEmitter(), SignalInterface {
     companion object {
         const val TAG = "connect.SignalClient"
         fun generateRequestId(): Double {
@@ -55,7 +56,7 @@ class SignalClient @Inject constructor(
 
     var type: String? = null
     override var socket: Socket? = null
-    var peerClient: PeerApi? = null
+    var peerClient: PeerClient? = null
     private val scope = CoroutineScope(Dispatchers.Main)
 
     /**
@@ -104,7 +105,7 @@ class SignalClient @Inject constructor(
         return suspendCoroutine { continuation ->
             scope.launch {
                 val clientType = if (type === "offer") "answer" else "offer"
-                peerClient = PeerApi(context)
+                peerClient = PeerClient(context)
                 // Buffer ICE Candidates if they arrive before the Peer Connection is established
                 val candidatesBuffer = mutableListOf<IceCandidate>()
                 // If we are waiting on an offer, create a link to the address
@@ -113,6 +114,7 @@ class SignalClient @Inject constructor(
                 }
                 // Listen to Remote ICE Candidates
                 socket!!.on("${type}-candidate") {
+                    this@SignalClient.emit(Event("${type}-candidate", it))
                     Log.d(
                         TAG,
                         "onIce${type.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() }}Candidate(${it[0]})"
@@ -135,6 +137,7 @@ class SignalClient @Inject constructor(
                         )
                         // Send Local ICECandidates to Peer
                         socket?.emit("${clientType}-candidate", iceCandidate.toJSON())
+                        this@SignalClient.emit(Event("${clientType}-candidate", iceCandidate))
                     },{
                         // Handle a Data Channel from the Peer
                         // This only happens for a client that creates an Answer,
@@ -224,7 +227,9 @@ class SignalClient @Inject constructor(
                     "signal.on${type.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() }}Description($description)"
                 )
                 val sdpType = if (type === "offer") SessionDescription.Type.OFFER else SessionDescription.Type.ANSWER
-                continuation.resume(SessionDescription(sdpType, description))
+                val sdp = SessionDescription(sdpType, description)
+                this@SignalClient.emit(Event("$type-description", sdp))
+                continuation.resume(sdp)
             }
         }
     }
@@ -238,7 +243,9 @@ class SignalClient @Inject constructor(
             socket!!.emit("link", linkBody, Ack { args: Array<Any> ->
                 val response = args[0] as JSONObject
                 Log.d(TAG, "link.ack($response)")
-                continuation.resume(LinkMessage.fromJson(response.toString()))
+                val linkMsg = LinkMessage.fromJson(response.toString())
+                this@SignalClient.emit(Event("link-message", linkMsg))
+                continuation.resume(linkMsg)
             })
         }
     }

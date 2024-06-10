@@ -2,12 +2,14 @@ package foundation.algorand.auth.connect
 
 import android.content.Context
 import android.util.Log
+import foundation.algorand.auth.util.Event
+import foundation.algorand.auth.util.EventEmitter
 import org.webrtc.*
 import java.nio.ByteBuffer
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
 
-class PeerApi(context: Context) {
+class PeerClient(context: Context): EventEmitter() {
     companion object {
         const val TAG = "connect.PeerApi"
     }
@@ -64,10 +66,12 @@ class PeerApi(context: Context) {
                     Log.d(TAG, "onDataChannel($p0)")
                     dataChannel = p0
                     onDataChannel(p0!!)
+                    this@PeerClient.emit(Event("data-channel", p0))
                 }
 
                 override fun onIceConnectionChange(p0: PeerConnection.IceConnectionState?) {
                     Log.d(TAG, "onIceConnectionChange($p0)")
+                    this@PeerClient.emit(Event("ice-connection-change", p0))
                     if (p0 === PeerConnection.IceConnectionState.FAILED) {
                         Log.e(TAG, "ICE Connection Failed")
                     }
@@ -75,34 +79,42 @@ class PeerApi(context: Context) {
 
                 override fun onIceConnectionReceivingChange(p0: Boolean) {
                     Log.d(TAG, "onIceConnectionReceivingChange($p0)")
+                    this@PeerClient.emit(Event("ice-connection-receiving-change", p0))
                 }
 
                 override fun onIceGatheringChange(p0: PeerConnection.IceGatheringState?) {
                     Log.d(TAG, "onIceGatheringChange($p0)")
+                    this@PeerClient.emit(Event("ice-gathering-change", p0))
                 }
 
                 override fun onAddStream(p0: MediaStream?) {
                     Log.d(TAG, "onAddStream($p0)")
+                    this@PeerClient.emit(Event("add-stream", p0))
                 }
 
                 override fun onSignalingChange(p0: PeerConnection.SignalingState?) {
                     Log.d(TAG, "onSignalingChange($p0)")
+                    this@PeerClient.emit(Event("signaling-change", p0))
                 }
 
                 override fun onIceCandidatesRemoved(p0: Array<out IceCandidate>?) {
                     Log.d(TAG, "onIceCandidatesRemoved($p0)")
+                    this@PeerClient.emit(Event("ice-candidates-removed", p0))
                 }
 
                 override fun onRemoveStream(p0: MediaStream?) {
                     Log.d(TAG, "onRemoveStream($p0)")
+                    this@PeerClient.emit(Event("remove-stream", p0))
                 }
 
                 override fun onRenegotiationNeeded() {
                     Log.d(TAG, "onRenegotiationNeeded()")
+                    this@PeerClient.emit(Event("renegotiation-needed"))
                 }
 
                 override fun onAddTrack(p0: RtpReceiver?, p1: Array<out MediaStream>?) {
                     Log.d(TAG, "onAddTrack($p0, $p1)")
+                    this@PeerClient.emit(Event("add-track", listOf(p0, p1)))
                 }
             }
         )
