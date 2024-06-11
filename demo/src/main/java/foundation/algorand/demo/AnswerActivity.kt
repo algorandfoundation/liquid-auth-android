@@ -1,18 +1,13 @@
 package foundation.algorand.demo
 
-import android.app.Activity
-import android.app.KeyguardManager
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
-import android.content.Intent
-import android.content.SharedPreferences
+import android.app.*
+import android.content.*
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.IBinder
 import android.os.StrictMode
 import android.util.Log
-import android.view.Menu
 import android.view.MenuItem
 import android.widget.ArrayAdapter
 import android.widget.ListView
@@ -49,7 +44,9 @@ import foundation.algorand.demo.credential.db.Credential
 import foundation.algorand.demo.credential.db.CredentialDatabase
 import foundation.algorand.demo.crypto.KeyPairs
 import foundation.algorand.demo.databinding.ActivityAnswerBinding
+import foundation.algorand.demo.services.LiquidWebRTCService
 import foundation.algorand.demo.settings.AccountDialogFragment
+import foundation.algorand.demo.settings.NotificationsDialogFragment
 import foundation.algorand.demo.settings.SettingsDialogFragment
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
@@ -58,32 +55,26 @@ import org.apache.commons.codec.binary.Base64
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.json.JSONArray
 import org.json.JSONObject
+import org.webrtc.DataChannel
 import ru.gildor.coroutines.okhttp.await
 import java.security.Security
 import java.util.concurrent.Executor
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
-import org.webrtc.PeerConnection
 
 class AnswerActivity : AppCompatActivity() {
     companion object {
         private const val TAG = "MainActivity"
     }
+    private var mBounded = false
+    private var liquidWebRTCService: LiquidWebRTCService? = null
+    private var mConnection: ServiceConnection? = null
+
     private lateinit var db: CredentialDatabase
     private val viewModel: AnswerViewModel by viewModels()
     private lateinit var binding: ActivityAnswerBinding
 
     private val cookieJar = Cookies()
-
-    private val iceServers = listOf(
-        PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer(),
-        PeerConnection.IceServer.builder("stun:stun1.l.google.com:19302").createIceServer(),
-        PeerConnection.IceServer.builder("stun:stun2.l.google.com:19302").createIceServer(),
-        PeerConnection.IceServer.builder("turn:global.relay.metered.ca:80").setUsername(BuildConfig.TURN_USERNAME).setPassword(BuildConfig.TURN_CREDENTIAL).createIceServer(),
-        PeerConnection.IceServer.builder("turn:global.relay.metered.ca:80?transport=tcp").setUsername(BuildConfig.TURN_USERNAME).setPassword(BuildConfig.TURN_CREDENTIAL).createIceServer(),
-        PeerConnection.IceServer.builder("turn:global.relay.metered.ca:443").setUsername(BuildConfig.TURN_USERNAME).setPassword(BuildConfig.TURN_CREDENTIAL).createIceServer(),
-        PeerConnection.IceServer.builder("turns:global.relay.metered.ca:443?transport=tcp").setUsername(BuildConfig.TURN_USERNAME).setPassword(BuildConfig.TURN_CREDENTIAL).createIceServer()
-    )
 
     // Third Party APIs
     private var httpClient = OkHttpClient.Builder()
@@ -106,6 +97,7 @@ class AnswerActivity : AppCompatActivity() {
     // Fragments
     private var settingsDialogFragment = SettingsDialogFragment()
     private lateinit var accountDialogFragment: AccountDialogFragment
+    private lateinit var notificationsDialogFragment: NotificationsDialogFragment
 
     private val userAgent = "${BuildConfig.APPLICATION_ID}/${BuildConfig.VERSION_NAME} " +
             "(Android ${Build.VERSION.RELEASE}; ${Build.MODEL}; ${Build.BRAND})"
@@ -135,7 +127,8 @@ class AnswerActivity : AppCompatActivity() {
         StrictMode.setThreadPolicy(policy)
         Security.removeProvider("BC")
         Security.insertProviderAt(BouncyCastleProvider(), 0)
-
+        notificationsDialogFragment = NotificationsDialogFragment(packageName)
+        checkNotificationStatus()
         // Create FIDO Client, TODO: refactor to Credential Manager
         fido2Client = Fido2ApiClient(this@AnswerActivity)
         scanner = GmsBarcodeScanning.getClient(this@AnswerActivity)
@@ -143,22 +136,6 @@ class AnswerActivity : AppCompatActivity() {
         keyguardManager = this@AnswerActivity.getSystemService(KEYGUARD_SERVICE) as KeyguardManager
         sharedPref = getSharedPreferences("ACCOUNT_SEEDS", Context.MODE_PRIVATE)
 
-        // Get Intent Data, this is when this activity is launched from a deep-link URI
-        val intentUri: Uri? = intent?.data
-        if (intentUri !== null) {
-            Log.d(TAG, "Intent Detected: $intentUri")
-            val msg = AuthMessage.fromUri(intentUri)
-            viewModel.setMessage(msg)
-            signalClient = SignalClient(msg.origin, this@AnswerActivity, httpClient)
-            lifecycleScope.launch {
-                val savedCredential = credentialRepository.getCredentialByOrigin(this@AnswerActivity, msg.origin)
-                if (savedCredential === null) {
-                    register(msg)
-                } else {
-                    authenticate(msg, savedCredential)
-                }
-            }
-        }
 
         // Ensure the device is secure to access FIDO/Passkeys
         if(!keyguardManager.isDeviceSecure){
@@ -206,13 +183,104 @@ class AnswerActivity : AppCompatActivity() {
 //                CredentialManager.create(this).createSettingsPendingIntent().send()
 //            }
 //        }
-//        binding.disconnectButton.setOnClickListener {
-//            cookieJar.clear()
-//            setSession(null)
-//            signalClient?.disconnect()
-//        }
+    }
+    override fun onPostCreate(savedInstanceState: Bundle?) {
+        super.onPostCreate(savedInstanceState)
+        initWebRTCService()
+        // Check for a txn in the intent
+
     }
 
+    /**
+     * Initialize the WebRTC Service
+     *
+     * This checks for a bound service and starts the service if it is not already running.
+     */
+    fun initWebRTCService(){
+        // Check if the service is already bound
+        if(mBounded){
+            return
+        }
+        // Handle the Service Connection
+        mConnection = object : ServiceConnection {
+            override fun onServiceDisconnected(name: ComponentName) {
+                Toast.makeText(this@AnswerActivity, "Service is disconnected", Toast.LENGTH_SHORT)
+                    .show()
+                mBounded = false
+                liquidWebRTCService = null
+            }
+
+            override fun onServiceConnected(name: ComponentName, service: IBinder) {
+                Toast.makeText(this@AnswerActivity, "Service is connected", Toast.LENGTH_SHORT).show()
+                mBounded = true
+                val mLocalBinder = service as LiquidWebRTCService.LocalBinder
+                liquidWebRTCService = mLocalBinder.getServerInstance()
+
+                // Get Intent Data, this is when this activity is launched from a deep-link URI
+                val intentUri: Uri? = intent?.data
+                if (intentUri !== null) {
+                    Log.d(TAG, "Intent Detected: $intentUri")
+                    intent?.let {
+                        Log.d(TAG, "Intent Data: $it ${intent.`package`}")
+                        val bundle = intent.extras
+                        if (bundle != null) {
+                            val keySet = bundle.keySet().toTypedArray()
+                            for (k in keySet) {
+                                if (k.contains("application_id")) {
+                                    bundle.getString(k)?.let { appId ->
+                                        liquidWebRTCService!!.updateLastKnownReferer(appId)
+                                    }
+                                }
+
+                            }
+                        }
+
+                        this@AnswerActivity.referrer?.let{
+                            Log.d(TAG, "Referrer: $it")
+                            liquidWebRTCService!!.updateLastKnownReferer(it.toString())
+                        }
+                    }
+                    val msg = AuthMessage.fromUri(intentUri)
+                    viewModel.setMessage(msg)
+                    liquidWebRTCService?.start( msg.origin, httpClient)
+                    lifecycleScope.launch {
+                        val savedCredential = credentialRepository.getCredentialByOrigin(this@AnswerActivity, msg.origin)
+                        if (savedCredential === null) {
+                            register(msg)
+                        } else {
+                            authenticate(msg, savedCredential)
+                        }
+                    }
+                }
+                // Handle a datachannel message when the app is closed
+                intent?.let {
+                    val msg = intent.getStringExtra("msg")
+                    if(msg !== null){
+                        handleMessages(msg)
+                    }
+                }
+                // Handle the app relaunching
+                if(liquidWebRTCService?.dataChannel is DataChannel && intent == null){
+                    liquidWebRTCService?.handleMessages(this@AnswerActivity, {
+                        this@AnswerActivity.handleMessages(it)
+                    }, {
+                        Log.d(TAG, "DataChannel State: $it")
+                    })
+                }
+            }
+        }
+        val startIntent = Intent(this, LiquidWebRTCService::class.java)
+        startService(startIntent)
+        bindService(startIntent, mConnection as ServiceConnection, Context.BIND_AUTO_CREATE)
+    }
+    fun checkNotificationStatus(){
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        if (!notificationManager.areNotificationsEnabled()) {
+            if(!notificationsDialogFragment.isVisible){
+                notificationsDialogFragment.show(supportFragmentManager, "NOTIFICATIONS")
+            }
+        }
+    }
     /**
      * Load seed phrases from SharedPreferences
      * This is not recommended in production applications, it is just for demonstration purposes.
@@ -343,15 +411,10 @@ class AnswerActivity : AppCompatActivity() {
     /**
      * Transaction Biometric Prompt
      */
-    suspend fun biometrics(msg: AuthMessage, txn: Transaction):BiometricPrompt.AuthenticationResult? {
+    suspend fun biometrics(txn: Transaction):BiometricPrompt.AuthenticationResult? {
         return suspendCoroutine { continuation ->
             biometricPrompt = BiometricPrompt(this, executor,
                 object : BiometricPrompt.AuthenticationCallback() {
-                    override fun onAuthenticationError(errorCode: Int,
-                                                       errString: CharSequence) {
-                        super.onAuthenticationError(errorCode, errString)
-                        continuation.resume(null)
-                    }
 
                     override fun onAuthenticationSucceeded(
                         result: BiometricPrompt.AuthenticationResult) {
@@ -385,7 +448,7 @@ class AnswerActivity : AppCompatActivity() {
      *
      * Callback for datachannel messages
      */
-    private fun handleMessages(authMessage: AuthMessage, msgStr: String){
+    private fun handleMessages(msgStr: String){
         val keyPair = KeyPairs.getKeyPair(viewModel.selected.value!!.toMnemonic())
         // DataChannel Message Callback
         runOnUiThread {
@@ -398,7 +461,7 @@ class AnswerActivity : AppCompatActivity() {
                     // Decode the Transaction
                     val txn = decodeUnsignedTransaction(message.get("txn").toString())
                     // Display a biometric prompt with some transaction details
-                    val biometricResult = biometrics(authMessage, txn!!)
+                    val biometricResult = biometrics(txn!!)
                     if (biometricResult !== null) {
                         val bytes = txn.bytesToSign()
                         val signatureBytes = KeyPairs.rawSignBytes(bytes, keyPair.private)
@@ -407,8 +470,20 @@ class AnswerActivity : AppCompatActivity() {
                         responseObj.put("sig", sig)
                         responseObj.put("txId", txn.txID())
                         responseObj.put("type", "transaction-signature")
-                        Log.d(TAG, "Sending: ${responseObj.toString()}")
-                        signalClient?.peerClient?.send(responseObj.toString())
+                        liquidWebRTCService!!.send(responseObj.toString())
+                        // Is Notification Intent(not Deep Link)
+                        if(intent?.data == null){
+                            intent?.let { deepLinkIntent->
+                                liquidWebRTCService!!.lastKnownReferer?.let { referer->
+                                    this@AnswerActivity.finish()
+                                    val browserIntent = packageManager.getLaunchIntentForPackage(referer.replace("android-app://", ""))
+                                        browserIntent?.let { openBrowser->
+                                            openBrowser.setFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+                                            startActivity(browserIntent)
+                                        }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -443,6 +518,7 @@ class AnswerActivity : AppCompatActivity() {
                     // Decode Barcode Message
                     val msg = AuthMessage.fromBarcode(barcode)
                     viewModel.setMessage(msg)
+                    liquidWebRTCService?.start( msg.origin, httpClient)
                     // Connect to Service
                     lifecycleScope.launch {
                         val savedCredential = credentialRepository.getCredentialByOrigin(this@AnswerActivity, msg.origin)
@@ -561,26 +637,33 @@ class AnswerActivity : AppCompatActivity() {
                                 count = 0,
                             )
                         )
-                        // Create P2P Channel
-                        val dc = signalClient?.peer(msg.requestId, "answer", iceServers)
-                        // Handle the DataChannel
-                        signalClient?.handleDataChannel(dc!!, {
-                            handleMessages(msg, it)
-                        }, {
-                            Log.d(TAG, "onStateChange($it)")
-                            if(it === "OPEN"){
-                                Log.d(TAG, "Sending Credential")
-                                val credMessage = JSONObject()
-                                credMessage.put("address", account.address.toString())
-                                credMessage.put("device", Build.MODEL)
-                                credMessage.put("origin", msg.origin)
-                                credMessage.put("id", credential.id)
-                                credMessage.put("prevCounter", 0)
-                                credMessage.put("type", "credential")
-                                signalClient!!.peerClient!!.send(credMessage.toString())
+                        if(mBounded) {
+                            liquidWebRTCService?.peer(msg.requestId, "answer")
+                            liquidWebRTCService?.handleMessages(this@AnswerActivity, { peerMsg ->
+                                handleMessages(peerMsg)
+                            }) {
+                                Log.d(TAG, "onStateChange($it)")
+                                if (it === "OPEN") {
+                                    Log.d(TAG, "Sending Credential")
+                                    val credMessage = JSONObject()
+                                    credMessage.put("address", account.address.toString())
+                                    credMessage.put("device", Build.MODEL)
+                                    credMessage.put("origin", msg.origin)
+                                    credMessage.put("id", credential.id)
+                                    credMessage.put("prevCounter", 0)
+                                    credMessage.put("type", "credential")
+                                    liquidWebRTCService!!.send(credMessage.toString())
+
+                                    intent?.data?.let {
+                                        this@AnswerActivity.onBackPressed()
+                                    }
+                                }
                             }
-                        })
-                        Toast.makeText(this@AnswerActivity, "Registered Credentials!", Toast.LENGTH_LONG).show()
+
+                            Toast.makeText(this@AnswerActivity, "Registered Credentials!", Toast.LENGTH_LONG).show()
+                        } else {
+                            Toast.makeText(this@AnswerActivity, "Couldn't find service", Toast.LENGTH_LONG).show()
+                        }
                     }
 
                 }
@@ -660,31 +743,37 @@ class AnswerActivity : AppCompatActivity() {
                         }
                         val msg = viewModel.message.value!!
                         val account = viewModel.account.value!!
-                        // Connect to the service then handle state changes and messages
-                        val dc = signalClient?.peer(msg.requestId, "answer", iceServers)
-                        Log.d(TAG, "DataChannel: $dc")
-                        signalClient?.handleDataChannel(dc!!, {
-                            handleMessages(msg, it)
-                        },  {
-                            Log.d(TAG, "onStateChange($it)")
-                            if(it === "OPEN"){
-                                Log.d(TAG, "Sending Credential")
-                                val credMessage = JSONObject()
-                                credMessage.put("address", account.address.toString())
-                                credMessage.put("device", Build.MODEL)
-                                credMessage.put("origin", msg.origin)
-                                credMessage.put("id", credential.id)
-                                credMessage.put("prevCounter", viewModel.count.value!!)
-                                credMessage.put("type", "credential")
-                                signalClient!!.peerClient!!.send(credMessage.toString())
+                        if(mBounded){
+                            liquidWebRTCService?.peer(msg.requestId, "answer")
+                            liquidWebRTCService?.handleMessages(this@AnswerActivity, { peerMsg ->
+                                handleMessages(peerMsg)
+                            }) {
+                                Log.d(TAG, "onStateChange($it)")
+                                if(it === "OPEN"){
+                                    Log.d(TAG, "Sending Credential")
+                                    val credMessage = JSONObject()
+                                    credMessage.put("address", account.address.toString())
+                                    credMessage.put("device", Build.MODEL)
+                                    credMessage.put("origin", msg.origin)
+                                    credMessage.put("id", credential.id)
+                                    credMessage.put("prevCounter", viewModel.count.value!!)
+                                    credMessage.put("type", "credential")
+                                    liquidWebRTCService?.send(credMessage.toString())
+                                    runOnUiThread{
+                                        intent?.data?.let {
+                                            this@AnswerActivity.onBackPressed()
+                                        }
+                                    }
+                                }
                             }
-                        })
+                        } else {
+                            Toast.makeText(this@AnswerActivity, "Couldn't find service", Toast.LENGTH_LONG).show()
+                        }
                     }
                 }
             }
         }
     }
-
 
     /**
      * Update Render for demonstration purposes only
