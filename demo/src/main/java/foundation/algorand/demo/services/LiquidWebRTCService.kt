@@ -236,7 +236,7 @@ class LiquidWebRTCService : Service() {
     fun handleMessages(
         activity: Activity,
         onMessage: (msg: String) -> Unit,
-        onStateChange: ((state: String?) -> Unit)?
+        onStateChange: ((state: String?) -> Unit)? = null
     ) {
         // If the Data Channel is available, handle messages
         dataChannel?.let {

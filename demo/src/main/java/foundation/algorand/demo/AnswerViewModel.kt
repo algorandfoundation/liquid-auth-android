@@ -1,17 +1,16 @@
 package foundation.algorand.demo
 
 import android.content.Context
+import android.os.Build
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import com.algorand.algosdk.account.Account
-import com.algorand.algosdk.transaction.Transaction
-import com.algorand.algosdk.util.Encoder
-import com.algorand.algosdk.v2.client.common.AlgodClient
 import com.google.android.gms.fido.fido2.api.common.PublicKeyCredential
 import foundation.algorand.auth.connect.AuthMessage
 import foundation.algorand.demo.credential.CredentialRepository
 import foundation.algorand.demo.credential.db.Credential
+import org.json.JSONObject
 
 /**
  * Demo View Model
@@ -20,30 +19,6 @@ import foundation.algorand.demo.credential.db.Credential
  */
 class AnswerViewModel: ViewModel() {
     private val credentialRepository = CredentialRepository()
-    // Main Account
-    private val _account = MutableLiveData<Account?>().apply {
-        value = null
-    }
-    val account: LiveData<Account?> = _account
-    fun setAccount(account: Account){
-        _account.value = account
-    }
-    // Selected Account, defaults to the main account
-    private val _selected = MutableLiveData<Account?>().apply {
-        value = null
-    }
-    val selected: LiveData<Account?> = _selected
-    fun setSelected(account: Account){
-        _selected.value = account
-    }
-    // Rekey Account
-    private val _rekey = MutableLiveData<Account?>().apply {
-        value = null
-    }
-    val rekey: LiveData<Account?> = _rekey
-    fun setRekey(account: Account){
-        _rekey.value = account
-    }
     private val _session = MutableLiveData<String>().apply {
         value = "Logged Out"
     }
@@ -74,36 +49,31 @@ class AnswerViewModel: ViewModel() {
     fun setCount(i: Int){
         _count.value = i
     }
-    suspend fun saveCredential(context: Context, origin: String, credential: PublicKeyCredential){
+
+
+    suspend fun saveCredential(context: Context, account: Account, credential: PublicKeyCredential){
         credentialRepository.saveCredential(
             context,
             Credential(
                 credentialId = credential.id!!,
-                userHandle = account.value!!.address.toString(),
-                userId = account.value!!.address.toString(),
-                origin = origin,
+                userHandle = account.address.toString(),
+                userId = account.address.toString(),
+                origin = message.value!!.origin,
                 publicKey = "",
                 privateKey = "",
                 count = 0,
             )
         )
     }
-    // Alogrand Rekey
-    val algod = AlgodClient("https://testnet-api.algonode.cloud", 443, "")
-    fun rekey(sender: Account, rekey: Account, signer: Account? = null){
-        val tx1: Transaction = Transaction.PaymentTransactionBuilder()
-            .lookupParams(algod) // lookup fee, firstValid, lastValid
-            .sender(sender.address)
-            .receiver(sender.address)
-            .rekey(rekey.address)
-            .amount(0)
-            .build()
-        val signedTxn = signer?.signTransaction(tx1) ?: sender.signTransaction(tx1)
-        val signedTxnBytes = Encoder.encodeToMsgPack(signedTxn)
-        val post = algod.RawTransaction().rawtxn(signedTxnBytes).execute()
-        if (!post.isSuccessful) {
-            throw Exception("Failed to post transaction")
-        }
-        setSelected(rekey)
+
+    fun getCredentialMessage(account: Account, credential: PublicKeyCredential): JSONObject {
+        val credMessage = JSONObject()
+        credMessage.put("address", account.address.toString())
+        credMessage.put("device", Build.MODEL)
+        credMessage.put("origin", message.value!!.origin)
+        credMessage.put("id", credential.id)
+        credMessage.put("prevCounter", count.value!!)
+        credMessage.put("type", "credential")
+        return credMessage
     }
 }
