@@ -58,7 +58,6 @@ import org.json.JSONObject
 import org.webrtc.DataChannel
 import ru.gildor.coroutines.okhttp.await
 import java.security.Security
-import java.util.concurrent.Executor
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
 
@@ -265,14 +264,11 @@ class AnswerActivity : AppCompatActivity() {
         // Handle the Service Connection
         mConnection = object : ServiceConnection {
             override fun onServiceDisconnected(name: ComponentName) {
-                Toast.makeText(this@AnswerActivity, "Service is disconnected", Toast.LENGTH_SHORT)
-                    .show()
                 mBounded = false
                 liquidWebRTCService = null
             }
 
             override fun onServiceConnected(name: ComponentName, service: IBinder) {
-                Toast.makeText(this@AnswerActivity, "Service is connected", Toast.LENGTH_SHORT).show()
                 mBounded = true
                 val mLocalBinder = service as LiquidWebRTCService.LocalBinder
                 liquidWebRTCService = mLocalBinder.getServerInstance()
@@ -467,10 +463,6 @@ class AnswerActivity : AppCompatActivity() {
      */
     private fun handleMessages(msgStr: String) {
         val keyPair = KeyPairs.getKeyPair(wallet.selected.value!!.toMnemonic())
-        // DataChannel Message Callback
-        runOnUiThread {
-            Toast.makeText(this@AnswerActivity, msgStr, Toast.LENGTH_SHORT).show()
-        }
         try {
             val message = JSONObject(msgStr)
             if (message.get("type") == "transaction") {
@@ -489,7 +481,7 @@ class AnswerActivity : AppCompatActivity() {
                         responseObj.put("type", "transaction-signature")
                         liquidWebRTCService!!.send(responseObj.toString())
                         // Is Notification Intent(not Deep Link)
-                        if (intent?.data == null) {
+                        if (intent?.data == null && liquidWebRTCService!!.isDeepLink) {
                             intent?.let { deepLinkIntent ->
                                 if (deepLinkIntent.getStringExtra("msg") !== null) {
                                     liquidWebRTCService!!.lastKnownReferer?.let { referer ->
@@ -509,6 +501,10 @@ class AnswerActivity : AppCompatActivity() {
                             }
                         }
                     }
+                }
+            } else {
+                runOnUiThread {
+                    Toast.makeText(this@AnswerActivity, msgStr, Toast.LENGTH_SHORT).show()
                 }
             }
         } catch (e: Exception) {
@@ -542,6 +538,7 @@ class AnswerActivity : AppCompatActivity() {
                     // Decode Barcode Message
                     val msg = AuthMessage.fromBarcode(barcode)
                     viewModel.setMessage(msg)
+                    liquidWebRTCService!!.updateDeepLinkFlag(false)
                     liquidWebRTCService?.start(msg.origin, httpClient)
                     // Connect to Service
                     lifecycleScope.launch {
@@ -657,6 +654,9 @@ class AnswerActivity : AppCompatActivity() {
                         viewModel.saveCredential(this@AnswerActivity, wallet.account.value!!, credential)
                         if (mBounded) {
                             liquidWebRTCService?.peer(msg.requestId, "answer")
+                            runOnUiThread {
+                                if(liquidWebRTCService!!.isDeepLink) this@AnswerActivity.onBackPressed()
+                            }
                             liquidWebRTCService?.handleMessages(this@AnswerActivity, { peerMsg ->
                                 handleMessages(peerMsg)
                             }) {
@@ -669,11 +669,6 @@ class AnswerActivity : AppCompatActivity() {
                                             credential
                                         ).toString()
                                     )
-                                    runOnUiThread {
-                                        intent?.data?.let {
-                                            this@AnswerActivity.onBackPressed()
-                                        }
-                                    }
                                 }
                             }
 
@@ -761,11 +756,14 @@ class AnswerActivity : AppCompatActivity() {
                         val msg = viewModel.message.value!!
                         if (mBounded) {
                             liquidWebRTCService?.peer(msg.requestId, "answer")
+                            runOnUiThread {
+                                if(liquidWebRTCService!!.isDeepLink) this@AnswerActivity.onBackPressed()
+                            }
                             liquidWebRTCService?.handleMessages(this@AnswerActivity, { peerMsg ->
                                 handleMessages(peerMsg)
                             }) {
                                 Log.d(TAG, "onStateChange($it)")
-                                if (it === "OPEN" || liquidWebRTCService?.dataChannel?.state() === DataChannel.State.OPEN) {
+                                if (it === "OPEN") {
                                     Log.d(TAG, "Sending Credential")
                                     liquidWebRTCService?.send(
                                         viewModel.getCredentialMessage(
@@ -773,12 +771,6 @@ class AnswerActivity : AppCompatActivity() {
                                             credential
                                         ).toString()
                                     )
-                                    runOnUiThread {
-                                        intent?.data?.let {
-                                            Log.d(TAG, "Intent Data: $it")
-                                            this@AnswerActivity.onBackPressed()
-                                        }
-                                    }
                                 }
                             }
                         } else {

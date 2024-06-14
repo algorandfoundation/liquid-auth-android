@@ -34,6 +34,7 @@ class LiquidWebRTCService : Service() {
 
     // Last known deep-link referrer
     var lastKnownReferer: String? = null
+    var isDeepLink: Boolean = true
 
     // Liquid Signal Components
     var signalClient: SignalClient? = null
@@ -70,14 +71,17 @@ class LiquidWebRTCService : Service() {
             return this@LiquidWebRTCService
         }
     }
+
     // Service Binder
     var mBinder: IBinder = LocalBinder()
+
     /**
      * Handle Service Binding
      */
     override fun onBind(intent: Intent): IBinder {
         return mBinder
     }
+
     /**
      * Handle Service Creation
      *
@@ -140,6 +144,7 @@ class LiquidWebRTCService : Service() {
             }
         }
     }
+
     /**
      * Create a Notification Builder with Defaults
      *
@@ -158,6 +163,7 @@ class LiquidWebRTCService : Service() {
             .setColor(ContextCompat.getColor(this@LiquidWebRTCService, R.color.md_theme_primary))
             .setSmallIcon(R.drawable.baseline_account_balance_wallet_24)
     }
+
     /**
      * Create a PendingIntent
      *
@@ -245,9 +251,9 @@ class LiquidWebRTCService : Service() {
                 stats.statsMap.forEach { (_, value) ->
                     val state = value.members["state"] as String?
                     val candidateId = value.members["remoteCandidateId"] as String?
-                    if(value.type == "candidate-pair" && state != null){
+                    if (value.type == "candidate-pair" && state != null) {
                         Log.d(TAG, "State: $value")
-                        if(state != "waiting" && state != "failed") {
+                        if (state != "waiting" && state != "failed") {
                             peerInfo = state
 
                             notify(
@@ -268,13 +274,26 @@ class LiquidWebRTCService : Service() {
 
             // Handle Data Channel Messages
             signalClient?.handleDataChannel(it, { msg ->
-                if(peerInfo != "succeeded"){
+                if (activity.hasWindowFocus()) {
+                    onMessage(msg)
+                    return@handleDataChannel
+                }
+                Log.d(TAG, "DataChannel Message: $msg")
+                notify(
+                    createNotificationBuilder(msg, "Message", LIQUID_PEER_NOTIFICATION_CHANNEL_ID)
+                        .setAutoCancel(true)
+                        .setContentIntent(createPendingIntent(msg))
+                        .setOnlyAlertOnce(false),
+                    nextNotificationId
+                )
+            }, { state ->
+                if (state == "OPEN") {
                     peerConnection!!.getStats { stats ->
                         stats.statsMap.forEach { (_, value) ->
                             val status = value.members["state"] as String?
                             val candidateId = value.members["remoteCandidateId"] as String?
-                            if(value.type == "candidate-pair" && status != null){
-                                if(status != "waiting" && status != "failed"){
+                            if (value.type == "candidate-pair" && status != null) {
+                                if (status != "waiting" && status != "failed") {
                                     peerInfo = status.toString()
                                     notify(
                                         createNotificationBuilder(
@@ -292,29 +311,22 @@ class LiquidWebRTCService : Service() {
                     }
                     notify(createNotificationBuilder("Peer: $peerInfo"))
                 }
-                if(activity.hasWindowFocus()){
-                    onMessage(msg)
-                    return@handleDataChannel
-                }
-                Log.d(TAG, "DataChannel Message: $msg")
-                notify(
-                    createNotificationBuilder(msg, "Data Channel Message", LIQUID_PEER_NOTIFICATION_CHANNEL_ID)
-                        .setAutoCancel(true)
-                        .setContentIntent(createPendingIntent(msg))
-                        .setOnlyAlertOnce(false),
-                    nextNotificationId
-                )
-            }, { state ->
-                onStateChange?.invoke(state)
-                if(state == DataChannel.State.CLOSED.toString() || state == DataChannel.State.CLOSING.toString()){
+                if (state == "CLOSED" || state == "CLOSING") {
                     notify(createNotificationBuilder("Tap to open the app.").setContentIntent(createPendingIntent()))
                 }
+                onStateChange?.invoke(state)
             })
         }
     }
+
     fun updateLastKnownReferer(referer: String?) {
         lastKnownReferer = referer
     }
+
+    fun updateDeepLinkFlag(isDeepLink: Boolean) {
+        this.isDeepLink = isDeepLink
+    }
+
     /**
      * Send a Message
      */
