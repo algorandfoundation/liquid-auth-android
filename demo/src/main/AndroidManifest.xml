@@ -24,7 +24,7 @@
             tools:targetApi="31">
 
         <service
-                android:name=".services.LiquidWebRTCService"
+                android:name="foundation.algorand.auth.connect.SignalService"
                 android:enabled="true"
                 android:exported="false"
                 android:foregroundServiceType="dataSync"

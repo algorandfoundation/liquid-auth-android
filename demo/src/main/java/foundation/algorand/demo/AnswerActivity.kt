@@ -34,6 +34,7 @@ import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 import foundation.algorand.auth.Cookie
 import foundation.algorand.auth.connect.AuthMessage
 import foundation.algorand.auth.connect.SignalClient
+import foundation.algorand.auth.connect.SignalService
 import foundation.algorand.auth.crypto.decodeBase64
 import foundation.algorand.auth.fido2.AssertionApi
 import foundation.algorand.auth.fido2.AttestationApi
@@ -44,7 +45,6 @@ import foundation.algorand.demo.credential.db.Credential
 import foundation.algorand.demo.credential.db.CredentialDatabase
 import foundation.algorand.demo.crypto.KeyPairs
 import foundation.algorand.demo.databinding.ActivityAnswerBinding
-import foundation.algorand.demo.services.LiquidWebRTCService
 import foundation.algorand.demo.settings.AccountDialogFragment
 import foundation.algorand.demo.settings.NotificationsDialogFragment
 import foundation.algorand.demo.settings.SettingsDialogFragment
@@ -56,6 +56,7 @@ import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.json.JSONArray
 import org.json.JSONObject
 import org.webrtc.DataChannel
+import org.webrtc.PeerConnection
 import ru.gildor.coroutines.okhttp.await
 import java.security.Security
 import kotlin.coroutines.resume
@@ -68,15 +69,38 @@ class AnswerActivity : AppCompatActivity() {
     }
 
     // Liquid Auth Service
+    private val iceServers = listOf(
+        PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer(),
+        PeerConnection.IceServer.builder("stun:stun1.l.google.com:19302").createIceServer(),
+        PeerConnection.IceServer.builder("stun:stun2.l.google.com:19302").createIceServer(),
+        PeerConnection.IceServer.builder("turn:global.relay.metered.ca:80").setUsername(BuildConfig.TURN_USERNAME)
+            .setPassword(
+                BuildConfig.TURN_CREDENTIAL
+            ).createIceServer(),
+        PeerConnection.IceServer.builder("turn:global.relay.metered.ca:80?transport=tcp")
+            .setUsername(BuildConfig.TURN_USERNAME).setPassword(
+                BuildConfig.TURN_CREDENTIAL
+            ).createIceServer(),
+        PeerConnection.IceServer.builder("turn:global.relay.metered.ca:443").setUsername(BuildConfig.TURN_USERNAME)
+            .setPassword(
+                BuildConfig.TURN_CREDENTIAL
+            ).createIceServer(),
+        PeerConnection.IceServer.builder("turns:global.relay.metered.ca:443?transport=tcp")
+            .setUsername(BuildConfig.TURN_USERNAME).setPassword(
+                BuildConfig.TURN_CREDENTIAL
+            ).createIceServer()
+    )
+
     private var mBounded = false
-    private var liquidWebRTCService: LiquidWebRTCService? = null
+    private var signalService: SignalService? = null
     private var mConnection: ServiceConnection? = null
 
     // Data Models
     private lateinit var db: CredentialDatabase
-    private val credentialRepository = CredentialRepository() // Handle Credential Operations
-    private val viewModel: AnswerViewModel by viewModels()    // Handle View State
-    private val wallet: WalletViewModel by viewModels()       // Handle Wallet Operations
+    private val credentialRepository = CredentialRepository()        // Handle Credential Operations
+    private val viewModel: AnswerViewModel by viewModels()           // Handle View State
+    private val wallet: WalletViewModel by viewModels()              // Handle Wallet Operations
+    private val notifications: NotificationViewModel by viewModels() // Handle Notifications
 
     // Fragments/Bindings
     private lateinit var accountDialogFragment: AccountDialogFragment
@@ -193,11 +217,12 @@ class AnswerActivity : AppCompatActivity() {
      * Reload the application state from an Intent
      */
     private fun hydrateIntents() {
-        val isConnected = liquidWebRTCService?.dataChannel is DataChannel && liquidWebRTCService?.dataChannel?.state() === DataChannel.State.OPEN
+        val isConnected = signalService?.dataChannel is DataChannel && signalService?.dataChannel?.state() === DataChannel.State.OPEN
         val isIntent = intent != null
         val isDeepLink = intent?.data != null && intent.data is Uri
         val isDataChannelMessage = intent?.getStringExtra("msg") != null
         if (isDeepLink) {
+            signalService!!.updateDeepLinkFlag(true)
             val intentUri = intent.data as Uri
             Log.d(TAG, "Intent Detected: $intentUri")
 
@@ -208,7 +233,7 @@ class AnswerActivity : AppCompatActivity() {
                 for (k in keySet) {
                     if (k.contains("application_id")) {
                         bundle.getString(k)?.let { appId ->
-                            liquidWebRTCService!!.updateLastKnownReferer(appId)
+                            signalService!!.updateLastKnownReferer(appId)
                         }
                     }
 
@@ -217,13 +242,13 @@ class AnswerActivity : AppCompatActivity() {
             // Find the Referrer in the Activity
             this@AnswerActivity.referrer?.let {
                 Log.d(TAG, "Referrer: $it")
-                liquidWebRTCService!!.updateLastKnownReferer(it.toString())
+                signalService!!.updateLastKnownReferer(it.toString())
             }
 
             // Set the Message and Start the Service
             val msg = AuthMessage.fromUri(intentUri)
             viewModel.setMessage(msg)
-            liquidWebRTCService?.start(msg.origin, httpClient)
+            signalService?.start(msg.origin, httpClient, notifications.createNotificationBuilder(this@AnswerActivity), NotificationViewModel.SERVICE_NOTIFICATION_ID)
 
             // Launch the authentication process
             lifecycleScope.launch {
@@ -234,12 +259,6 @@ class AnswerActivity : AppCompatActivity() {
                     authenticate(msg, savedCredential)
                 }
             }
-        }
-        // Handle the app relaunching
-        if ( isConnected && !isIntent) {
-            liquidWebRTCService?.handleMessages(this@AnswerActivity, {
-                this@AnswerActivity.handleMessages(it)
-            })
         }
 
         // Handle a datachannel message
@@ -261,21 +280,22 @@ class AnswerActivity : AppCompatActivity() {
         if (mBounded) {
             return
         }
+        notifications.createChannels(getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
         // Handle the Service Connection
         mConnection = object : ServiceConnection {
             override fun onServiceDisconnected(name: ComponentName) {
                 mBounded = false
-                liquidWebRTCService = null
+                signalService = null
             }
 
             override fun onServiceConnected(name: ComponentName, service: IBinder) {
                 mBounded = true
-                val mLocalBinder = service as LiquidWebRTCService.LocalBinder
-                liquidWebRTCService = mLocalBinder.getServerInstance()
+                val mLocalBinder = service as SignalService.LocalBinder
+                signalService = mLocalBinder.getServerInstance()
                 onServiceConnection()
             }
         }
-        val startIntent = Intent(this, LiquidWebRTCService::class.java)
+        val startIntent = Intent(this, SignalService::class.java)
         startService(startIntent)
         bindService(startIntent, mConnection as ServiceConnection, Context.BIND_AUTO_CREATE)
     }
@@ -479,12 +499,12 @@ class AnswerActivity : AppCompatActivity() {
                         responseObj.put("sig", sig)
                         responseObj.put("txId", txn.txID())
                         responseObj.put("type", "transaction-signature")
-                        liquidWebRTCService!!.send(responseObj.toString())
+                        signalService!!.send(responseObj.toString())
                         // Is Notification Intent(not Deep Link)
-                        if (intent?.data == null && liquidWebRTCService!!.isDeepLink) {
+                        if (intent?.data == null && signalService!!.isDeepLink) {
                             intent?.let { deepLinkIntent ->
                                 if (deepLinkIntent.getStringExtra("msg") !== null) {
-                                    liquidWebRTCService!!.lastKnownReferer?.let { referer ->
+                                    signalService!!.lastKnownReferer?.let { referer ->
                                         this@AnswerActivity.finish()
                                         val browserIntent = packageManager.getLaunchIntentForPackage(
                                             referer.replace(
@@ -538,8 +558,13 @@ class AnswerActivity : AppCompatActivity() {
                     // Decode Barcode Message
                     val msg = AuthMessage.fromBarcode(barcode)
                     viewModel.setMessage(msg)
-                    liquidWebRTCService!!.updateDeepLinkFlag(false)
-                    liquidWebRTCService?.start(msg.origin, httpClient)
+                    signalService!!.updateDeepLinkFlag(false)
+                    signalService?.start(
+                        msg.origin,
+                        httpClient,
+                        notifications.createNotificationBuilder(this@AnswerActivity),
+                        NotificationViewModel.SERVICE_NOTIFICATION_ID,
+                    )
                     // Connect to Service
                     lifecycleScope.launch {
                         val savedCredential =
@@ -652,27 +677,34 @@ class AnswerActivity : AppCompatActivity() {
                             liquidExtJSON
                         ).await()
                         viewModel.saveCredential(this@AnswerActivity, wallet.account.value!!, credential)
+                        Log.d(TAG, "Credential Saved")
                         if (mBounded) {
-                            liquidWebRTCService?.peer(msg.requestId, "answer")
+                            Log.d(TAG, "Service Bonded")
+                            signalService?.peer(msg.requestId, "answer", iceServers,  notifications.createNotificationBuilder(this@AnswerActivity), NotificationViewModel.SERVICE_NOTIFICATION_ID)
                             runOnUiThread {
-                                if(liquidWebRTCService!!.isDeepLink) this@AnswerActivity.onBackPressed()
+                                if(signalService!!.isDeepLink) this@AnswerActivity.onBackPressed()
                             }
-                            liquidWebRTCService?.handleMessages(this@AnswerActivity, { peerMsg ->
+                            signalService?.handleMessages(this@AnswerActivity, { peerMsg ->
+                                Log.d(TAG, "handleMessages($peerMsg)")
                                 handleMessages(peerMsg)
-                            }) {
+                            },{
                                 Log.d(TAG, "onStateChange($it)")
                                 if (it === "OPEN") {
                                     Log.d(TAG, "Sending Credential")
-                                    liquidWebRTCService!!.send(
+                                    signalService?.send(
                                         viewModel.getCredentialMessage(
                                             wallet.account.value!!,
                                             credential
                                         ).toString()
                                     )
                                 }
-                            }
-
-                            Toast.makeText(this@AnswerActivity, "Registered Credentials!", Toast.LENGTH_LONG).show()
+                            },
+                                notifications.createNotificationBuilder(this@AnswerActivity, "Loading", "Messages", NotificationViewModel.PEER_CHANNEL_ID),
+                                NotificationViewModel.MESSAGE_NOTIFICATION_ID_START,
+                                notifications.createNotificationBuilder(this@AnswerActivity),
+                                NotificationViewModel.SERVICE_NOTIFICATION_ID,
+                                AnswerActivity::class.java
+                            )
                         } else {
                             Toast.makeText(this@AnswerActivity, "Couldn't find service", Toast.LENGTH_LONG).show()
                         }
@@ -755,24 +787,31 @@ class AnswerActivity : AppCompatActivity() {
                         }
                         val msg = viewModel.message.value!!
                         if (mBounded) {
-                            liquidWebRTCService?.peer(msg.requestId, "answer")
+                            signalService?.peer(msg.requestId, "answer", iceServers,  notifications.createNotificationBuilder(this@AnswerActivity), NotificationViewModel.SERVICE_NOTIFICATION_ID)
                             runOnUiThread {
-                                if(liquidWebRTCService!!.isDeepLink) this@AnswerActivity.onBackPressed()
+                                if(signalService!!.isDeepLink) this@AnswerActivity.onBackPressed()
                             }
-                            liquidWebRTCService?.handleMessages(this@AnswerActivity, { peerMsg ->
+                            signalService?.handleMessages(this@AnswerActivity, { peerMsg ->
+                                Log.d(TAG, "handleMessages($peerMsg)")
                                 handleMessages(peerMsg)
-                            }) {
+                            },{
                                 Log.d(TAG, "onStateChange($it)")
                                 if (it === "OPEN") {
                                     Log.d(TAG, "Sending Credential")
-                                    liquidWebRTCService?.send(
+                                    signalService?.send(
                                         viewModel.getCredentialMessage(
                                             wallet.account.value!!,
                                             credential
                                         ).toString()
                                     )
                                 }
-                            }
+                            },
+                                notifications.createNotificationBuilder(this@AnswerActivity, "Loading", "Messages", NotificationViewModel.PEER_CHANNEL_ID),
+                                NotificationViewModel.MESSAGE_NOTIFICATION_ID_START,
+                                notifications.createNotificationBuilder(this@AnswerActivity),
+                                NotificationViewModel.SERVICE_NOTIFICATION_ID,
+                                AnswerActivity::class.java
+                            )
                         } else {
                             Toast.makeText(this@AnswerActivity, "Couldn't find service", Toast.LENGTH_LONG).show()
                         }
@@ -781,7 +820,6 @@ class AnswerActivity : AppCompatActivity() {
             }
         }
     }
-
     /**
      * Update Render for demonstration purposes only
      */

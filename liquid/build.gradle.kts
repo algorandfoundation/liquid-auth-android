@@ -65,6 +65,8 @@ dependencies {
     // QR Code Generator
     implementation("io.github.g0dkar:qrcode-kotlin:4.1.1")
 
+    implementation("androidx.core:core-ktx:1.12.0")
+
     val coroutineVersion by extra { "1.7.1" }
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:$coroutineVersion")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutineVersion")
