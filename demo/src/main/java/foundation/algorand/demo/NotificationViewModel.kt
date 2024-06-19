@@ -56,7 +56,6 @@ class NotificationViewModel: ViewModel() {
         return Builder(context, channelId)
             .setContentTitle(contentTitle)
             .setContentText(contentText)
-            .setOnlyAlertOnce(true)
             .setColor(ContextCompat.getColor(context, R.color.md_theme_primary))
             .setSmallIcon(R.drawable.baseline_account_balance_wallet_24)
     }
