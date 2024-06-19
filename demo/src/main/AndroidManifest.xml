@@ -5,7 +5,13 @@
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
     <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
+    <queries>
+        <package android:name="com.android.chrome" />
 
+    </queries>
     <application
             android:allowBackup="true"
             android:dataExtractionRules="@xml/data_extraction_rules"
@@ -16,21 +22,33 @@
             android:theme="@style/Theme.Foundationalgorandauth"
             android:usesCleartextTraffic="true"
             tools:targetApi="31">
+
+        <service
+                android:name="foundation.algorand.auth.connect.SignalService"
+                android:enabled="true"
+                android:exported="false"
+                android:foregroundServiceType="dataSync"
+                android:icon="@mipmap/ic_launcher"
+                android:label="@string/app_name">
+        </service>
+
         <activity
                 android:name=".OfferActivity"
                 android:exported="false"/>
-
         <activity
                 android:name=".AnswerActivity"
                 android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
+
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.VIEW"/>
+
                 <category android:name="android.intent.category.DEFAULT"/>
                 <category android:name="android.intent.category.BROWSABLE"/>
+
                 <data android:scheme="liquid"/>
             </intent-filter>
         </activity>
@@ -40,6 +58,7 @@
                 android:exported="false">
             <intent-filter>
                 <action android:name="foundation.algorand.demo.BEGIN_GET_PASSKEY"/>
+
                 <category android:name="android.intent.category.DEFAULT"/>
             </intent-filter>
         </activity>
@@ -63,6 +82,7 @@
                 <category android:name="android.intent.category.DEFAULT"/>
             </intent-filter>
         </activity>
+
         <service
                 android:name=".services.LiquidCredentialProviderService"
                 android:enabled="true"
