@@ -248,7 +248,13 @@ class AnswerActivity : AppCompatActivity() {
             // Set the Message and Start the Service
             val msg = AuthMessage.fromUri(intentUri)
             viewModel.setMessage(msg)
-            signalService?.start(msg.origin, httpClient, notifications.createNotificationBuilder(this@AnswerActivity), NotificationViewModel.SERVICE_NOTIFICATION_ID, AnswerActivity::class.java)
+            signalService?.start(
+                msg.origin,
+                httpClient,
+                notifications.createNotificationBuilder(this@AnswerActivity),
+                NotificationViewModel.SERVICE_NOTIFICATION_ID,
+                AnswerActivity::class.java
+            )
 
             // Launch the authentication process
             lifecycleScope.launch {
@@ -500,17 +506,17 @@ class AnswerActivity : AppCompatActivity() {
                         responseObj.put("txId", txn.txID())
                         responseObj.put("type", "transaction-signature")
                         signalService!!.send(responseObj.toString())
+                        signalService!!.notify(
+                            notifications.createNotificationBuilder(this@AnswerActivity)
+                                .setOnlyAlertOnce(true)
+                                .setContentIntent(signalService!!.createPendingIntent(AnswerActivity::class.java))
+                            ,
+                            NotificationViewModel.SERVICE_NOTIFICATION_ID
+                        )
                         // Is Notification Intent(not Deep Link)
                         if (intent?.data == null && signalService!!.isDeepLink) {
                             intent?.let { deepLinkIntent ->
                                 if (deepLinkIntent.getStringExtra("msg") !== null) {
-                                    signalService!!.notify(
-                                        notifications.createNotificationBuilder(this@AnswerActivity)
-                                            .setOnlyAlertOnce(true)
-                                            .setContentIntent(signalService!!.createPendingIntent(AnswerActivity::class.java))
-                                        ,
-                                        NotificationViewModel.SERVICE_NOTIFICATION_ID
-                                    )
                                     signalService!!.lastKnownReferer?.let { referer ->
                                         this@AnswerActivity.finish()
                                         val browserIntent = packageManager.getLaunchIntentForPackage(
