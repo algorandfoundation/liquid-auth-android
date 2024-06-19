@@ -188,7 +188,7 @@ class SignalService : Service() {
                             .setContentText("Tap to open the app.")
                             .setOnlyAlertOnce(true)
                             .setContentIntent(createPendingIntent(activityClass, serviceIntentRequestCode,null))
-                    , 0
+                    , notificationId
                     )
                 }
                 onStateChange?.invoke(state)
