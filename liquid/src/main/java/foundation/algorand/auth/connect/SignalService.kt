@@ -8,7 +8,6 @@ import android.os.Binder
 import android.os.Build
 import android.os.IBinder
 import android.util.Log
-import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationCompat.Builder
 import androidx.core.app.ServiceCompat
 import okhttp3.OkHttpClient
@@ -99,10 +98,11 @@ class SignalService : Service() {
     fun start(
         url: String,
         httpClient: OkHttpClient,
-        serviceNotificationBuilder: Builder,
-        serviceNotificationId: Int
+        notificationBuilder: Builder,
+        notificationId: Int,
+        activityClass: Class<out Activity>
     ) {
-        startForeground(serviceNotificationBuilder, serviceNotificationId)
+        startForeground(notificationBuilder.setContentIntent(createPendingIntent(activityClass, 0)), notificationId)
         val isInitialized = signalClient != null
         if (isInitialized) {
             signalClient?.disconnect()
@@ -125,26 +125,23 @@ class SignalService : Service() {
         requestId: Double,
         type: String,
         iceServers: List<PeerConnection.IceServer>,
-        notificationBuilder: Builder,
-        notificationId: Int
     ) {
         dataChannel = signalClient?.peer(requestId, type, iceServers)
         peerClient = signalClient?.peerClient
         peerConnection = peerClient?.peerConnection
-        notify(notificationBuilder, notificationId)
     }
     /**
      * Create a PendingIntent
      *
      * This PendingIntent is used to open the SignTransactionActivity when a transaction message is received
      */
-    fun createPendingIntent(context: Context, activityClass: Class<out Activity>, requestCode: Int = 0, msg: String? = null): PendingIntent {
-        val answerIntent = Intent(context, activityClass)
+    fun createPendingIntent(activityClass: Class<out Activity>, requestCode: Int = 0, msg: String? = null): PendingIntent {
+        val answerIntent = Intent(this@SignalService, activityClass)
         answerIntent.setFlags(Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS)
         msg?.let {
             answerIntent.putExtra("msg", it)
         }
-        return TaskStackBuilder.create(context).run {
+        return TaskStackBuilder.create(this@SignalService).run {
             addNextIntentWithParentStack(answerIntent)
             getPendingIntent(
                 requestCode,
@@ -162,42 +159,14 @@ class SignalService : Service() {
         activity: Activity,
         onMessage: (msg: String) -> Unit,
         onStateChange: ((state: String?) -> Unit)? = null,
-        messageNotificationBuilder: Builder,
-        messageNotificationIdStart: Int = LIQUID_NOTIFICATION_ID,
-        serviceNotificationBuilder: Builder,
-        serviceNotificationId: Int = LIQUID_NOTIFICATION_ID,
+        notificationBuilder: Builder,
+        notificationId: Int = LIQUID_NOTIFICATION_ID,
         activityClass: Class<out Activity>
     ) {
-        var messageNotificationId = messageNotificationIdStart
+        var requestCode = 1
         var serviceIntentRequestCode = 0
         // If the Data Channel is available, handle messages
         dataChannel?.let {
-            var peerInfo = "Connecting..."
-            peerConnection!!.getStats { stats ->
-                stats.statsMap.forEach { (_, value) ->
-                    val state = value.members["state"] as String?
-                    val candidateId = value.members["remoteCandidateId"] as String?
-                    if (value.type == "candidate-pair" && state != null) {
-                        Log.d(TAG, "State: $value")
-                        if (state != "waiting" && state != "failed") {
-                            peerInfo = state
-
-                            notify(
-                                serviceNotificationBuilder.setContentText(
-                                    "Peer(${
-                                        candidateId?.replace(
-                                            "RTCIceCandidate_",
-                                            ""
-                                        )
-                                    }): $peerInfo"
-                                ),
-                                serviceNotificationId
-                            )
-                        }
-                    }
-                }
-            }
-            notify(serviceNotificationBuilder.setContentText("Peer: $peerInfo"), serviceNotificationId)
             // Handle Data Channel Messages
             signalClient?.handleDataChannel(it, { msg ->
                 if (activity.hasWindowFocus()) {
@@ -206,46 +175,20 @@ class SignalService : Service() {
                 }
                 Log.d(TAG, "DataChannel Message: $msg")
                 notify(
-                    messageNotificationBuilder
+                    notificationBuilder
                         .setContentText(msg)
-                        .setAutoCancel(true)
-                        .setContentIntent(createPendingIntent(this@SignalService, activityClass, messageNotificationId, msg))
-                        .setOnlyAlertOnce(false),
-                    messageNotificationId
+                        .setContentIntent(createPendingIntent(activityClass, requestCode, msg)),
+                    notificationId
                 )
-                messageNotificationId += 1
+                requestCode += 1
             }, { state ->
-                if (state == "OPEN") {
-                    peerConnection!!.getStats { stats ->
-                        stats.statsMap.forEach { (_, value) ->
-                            val status = value.members["state"] as String?
-                            val candidateId = value.members["remoteCandidateId"] as String?
-                            if (value.type == "candidate-pair" && status != null) {
-                                if (status != "waiting" && status != "failed") {
-                                    peerInfo = status.toString()
-                                    notify(
-                                        serviceNotificationBuilder.setContentText(
-                                            "Peer(${
-                                                candidateId?.replace(
-                                                    "RTCIceCandidate_",
-                                                    ""
-                                                )
-                                            }): $peerInfo"
-                                        ),
-                                        serviceNotificationId
-                                        )
-                                }
-                            }
-                        }
-                    }
-                    notify(serviceNotificationBuilder.setContentText("Peer: $peerInfo"), serviceNotificationId)
-                }
                 if (state == "CLOSED" || state == "CLOSING") {
                     notify(
-                        serviceNotificationBuilder
+                        notificationBuilder
                             .setContentText("Tap to open the app.")
-                            .setContentIntent(createPendingIntent(this@SignalService, activityClass, serviceIntentRequestCode,null))
-                    , serviceNotificationId
+                            .setOnlyAlertOnce(true)
+                            .setContentIntent(createPendingIntent(activityClass, serviceIntentRequestCode,null))
+                    , 0
                     )
                 }
                 onStateChange?.invoke(state)

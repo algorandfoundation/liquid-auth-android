@@ -248,7 +248,13 @@ class AnswerActivity : AppCompatActivity() {
             // Set the Message and Start the Service
             val msg = AuthMessage.fromUri(intentUri)
             viewModel.setMessage(msg)
-            signalService?.start(msg.origin, httpClient, notifications.createNotificationBuilder(this@AnswerActivity), NotificationViewModel.SERVICE_NOTIFICATION_ID)
+            signalService?.start(
+                msg.origin,
+                httpClient,
+                notifications.createNotificationBuilder(this@AnswerActivity),
+                NotificationViewModel.SERVICE_NOTIFICATION_ID,
+                AnswerActivity::class.java
+            )
 
             // Launch the authentication process
             lifecycleScope.launch {
@@ -500,6 +506,13 @@ class AnswerActivity : AppCompatActivity() {
                         responseObj.put("txId", txn.txID())
                         responseObj.put("type", "transaction-signature")
                         signalService!!.send(responseObj.toString())
+                        signalService!!.notify(
+                            notifications.createNotificationBuilder(this@AnswerActivity)
+                                .setOnlyAlertOnce(true)
+                                .setContentIntent(signalService!!.createPendingIntent(AnswerActivity::class.java))
+                            ,
+                            NotificationViewModel.SERVICE_NOTIFICATION_ID
+                        )
                         // Is Notification Intent(not Deep Link)
                         if (intent?.data == null && signalService!!.isDeepLink) {
                             intent?.let { deepLinkIntent ->
@@ -564,6 +577,7 @@ class AnswerActivity : AppCompatActivity() {
                         httpClient,
                         notifications.createNotificationBuilder(this@AnswerActivity),
                         NotificationViewModel.SERVICE_NOTIFICATION_ID,
+                        AnswerActivity::class.java,
                     )
                     // Connect to Service
                     lifecycleScope.launch {
@@ -680,7 +694,7 @@ class AnswerActivity : AppCompatActivity() {
                         Log.d(TAG, "Credential Saved")
                         if (mBounded) {
                             Log.d(TAG, "Service Bonded")
-                            signalService?.peer(msg.requestId, "answer", iceServers,  notifications.createNotificationBuilder(this@AnswerActivity), NotificationViewModel.SERVICE_NOTIFICATION_ID)
+                            signalService?.peer(msg.requestId, "answer", iceServers)
                             runOnUiThread {
                                 if(signalService!!.isDeepLink) this@AnswerActivity.onBackPressed()
                             }
@@ -699,8 +713,6 @@ class AnswerActivity : AppCompatActivity() {
                                     )
                                 }
                             },
-                                notifications.createNotificationBuilder(this@AnswerActivity, "Loading", "Messages", NotificationViewModel.PEER_CHANNEL_ID),
-                                NotificationViewModel.MESSAGE_NOTIFICATION_ID_START,
                                 notifications.createNotificationBuilder(this@AnswerActivity),
                                 NotificationViewModel.SERVICE_NOTIFICATION_ID,
                                 AnswerActivity::class.java
@@ -787,7 +799,7 @@ class AnswerActivity : AppCompatActivity() {
                         }
                         val msg = viewModel.message.value!!
                         if (mBounded) {
-                            signalService?.peer(msg.requestId, "answer", iceServers,  notifications.createNotificationBuilder(this@AnswerActivity), NotificationViewModel.SERVICE_NOTIFICATION_ID)
+                            signalService?.peer(msg.requestId, "answer", iceServers)
                             runOnUiThread {
                                 if(signalService!!.isDeepLink) this@AnswerActivity.onBackPressed()
                             }
@@ -806,8 +818,6 @@ class AnswerActivity : AppCompatActivity() {
                                     )
                                 }
                             },
-                                notifications.createNotificationBuilder(this@AnswerActivity, "Loading", "Messages", NotificationViewModel.PEER_CHANNEL_ID),
-                                NotificationViewModel.MESSAGE_NOTIFICATION_ID_START,
                                 notifications.createNotificationBuilder(this@AnswerActivity),
                                 NotificationViewModel.SERVICE_NOTIFICATION_ID,
                                 AnswerActivity::class.java
