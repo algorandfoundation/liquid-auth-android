@@ -1,6 +1,7 @@
 val TURN_USERNAME: String = "fc7708976bf5d60be20c5a1d"
 val TURN_CREDENTIAL: String = "sVpEREQGGhXOw4gX"
-
+val NODELY_TURN_USERNAME = "liquid-auth"
+val NODELY_TURN_CREDENTIAL = "sqmcP4MiTKMT4TGEDSk9jgHY"
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -21,6 +22,8 @@ android {
 
         buildConfigField("String", "TURN_USERNAME", "\"$TURN_USERNAME\"")
         buildConfigField("String", "TURN_CREDENTIAL", "\"$TURN_CREDENTIAL\"")
+        buildConfigField("String", "NODELY_TURN_USERNAME", "\"$NODELY_TURN_USERNAME\"")
+        buildConfigField("String", "NODELY_TURN_CREDENTIAL", "\"$NODELY_TURN_CREDENTIAL\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         resValue(
