@@ -1,3 +1,10 @@
+# [1.0.0-canary.3](https://github.com/algorandfoundation/liquid-auth-android/compare/v1.0.0-canary.2...v1.0.0-canary.3) (2024-06-20)
+
+
+### Bug Fixes
+
+* **demo:** add nodely TURN servers ([cc92b3c](https://github.com/algorandfoundation/liquid-auth-android/commit/cc92b3c5bb387bd67b7779b001485790447b6bc8))
+
 # [1.0.0-canary.2](https://github.com/algorandfoundation/liquid-auth-android/compare/v1.0.0-canary.1...v1.0.0-canary.2) (2024-06-19)
 
 
