@@ -67,28 +67,28 @@ class AnswerActivity : AppCompatActivity() {
         private const val TAG = "AnswerActivity"
         private const val SHARED_PREFERENCE_SEED_FILE = "ACCOUNT_SEEDS"
     }
+    fun createIceServer(uri: String, username: String, password: String): PeerConnection.IceServer {
+        return PeerConnection.IceServer.builder(uri)
+            .setUsername(username)
+            .setPassword(password)
+            .createIceServer()
+    }
 
     // Liquid Auth Service
     private val iceServers = listOf(
         PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer(),
         PeerConnection.IceServer.builder("stun:stun1.l.google.com:19302").createIceServer(),
         PeerConnection.IceServer.builder("stun:stun2.l.google.com:19302").createIceServer(),
-        PeerConnection.IceServer.builder("turn:global.relay.metered.ca:80").setUsername(BuildConfig.TURN_USERNAME)
-            .setPassword(
-                BuildConfig.TURN_CREDENTIAL
-            ).createIceServer(),
-        PeerConnection.IceServer.builder("turn:global.relay.metered.ca:80?transport=tcp")
-            .setUsername(BuildConfig.TURN_USERNAME).setPassword(
-                BuildConfig.TURN_CREDENTIAL
-            ).createIceServer(),
-        PeerConnection.IceServer.builder("turn:global.relay.metered.ca:443").setUsername(BuildConfig.TURN_USERNAME)
-            .setPassword(
-                BuildConfig.TURN_CREDENTIAL
-            ).createIceServer(),
-        PeerConnection.IceServer.builder("turns:global.relay.metered.ca:443?transport=tcp")
-            .setUsername(BuildConfig.TURN_USERNAME).setPassword(
-                BuildConfig.TURN_CREDENTIAL
-            ).createIceServer()
+        createIceServer("turn:global.turn.nodely.network:80?transport=tcp", BuildConfig.NODELY_TURN_USERNAME, BuildConfig.NODELY_TURN_CREDENTIAL),
+        createIceServer("turns:global.turn.nodely.network:443?transport=tcp", BuildConfig.NODELY_TURN_USERNAME, BuildConfig.NODELY_TURN_CREDENTIAL),
+        createIceServer("turn:eu.turn.nodely.io:80?transport=tcp", BuildConfig.NODELY_TURN_USERNAME, BuildConfig.NODELY_TURN_CREDENTIAL),
+        createIceServer("turns:eu.turn.nodely.io:443?transport=tcp", BuildConfig.NODELY_TURN_USERNAME, BuildConfig.NODELY_TURN_CREDENTIAL),
+        createIceServer("turn:us.turn.nodely.io:80?transport=tcp", BuildConfig.NODELY_TURN_USERNAME, BuildConfig.NODELY_TURN_CREDENTIAL),
+        createIceServer("turns:us.turn.nodely.io:443?transport=tcp", BuildConfig.NODELY_TURN_USERNAME, BuildConfig.NODELY_TURN_CREDENTIAL),
+        createIceServer("turn:global.relay.metered.ca:80", BuildConfig.TURN_USERNAME, BuildConfig.TURN_CREDENTIAL),
+        createIceServer("turn:global.relay.metered.ca:80?transport=tcp", BuildConfig.TURN_USERNAME, BuildConfig.TURN_CREDENTIAL),
+        createIceServer("turn:global.relay.metered.ca:443", BuildConfig.TURN_USERNAME, BuildConfig.TURN_CREDENTIAL),
+        createIceServer("turns:global.relay.metered.ca:443?transport=tcp", BuildConfig.TURN_USERNAME, BuildConfig.TURN_CREDENTIAL)
     )
 
     private var mBounded = false
