@@ -13,7 +13,7 @@ class PeerApi(context: Context) {
     }
 
     // Data Channel to send and receive messages
-    private var dataChannel: DataChannel? = null
+    var dataChannel: DataChannel? = null
 
     // Create the Peer Connection Factory
     private var peerConnectionFactory: PeerConnectionFactory

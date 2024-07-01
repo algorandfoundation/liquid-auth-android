@@ -57,4 +57,14 @@ class AuthMessageUnitTest {
         assertEquals(message.origin, "https://localhost")
     }
 
+    @Test
+    fun toJSON(){
+        val origin = "https://localhost:3000"
+        val requestId = SignalClient.generateRequestId()
+        val message = AuthMessage(origin, requestId)
+        val json = message.toJSON()
+        assertEquals(requestId, json.getDouble("requestId"), 0.0)
+        assertEquals(origin, json.getString("origin"))
+    }
+
 }
