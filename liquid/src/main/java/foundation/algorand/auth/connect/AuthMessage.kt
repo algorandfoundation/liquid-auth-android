@@ -16,7 +16,7 @@ private fun Uri.findParameterValue(parameterName: String): String? {
 }
 class AuthMessage @Inject constructor(
     var origin: String,
-    val requestId: Double
+    val requestId: String
 ) {
 
     companion object {
@@ -24,7 +24,7 @@ class AuthMessage @Inject constructor(
         fun fromUri(uri: Uri): AuthMessage {
             Log.d(TAG, "fromUri($uri)")
             val origin = "https://${uri.host}"
-            val requestId = uri.findParameterValue("requestId")!!.toDouble()
+            val requestId = uri.findParameterValue("requestId").toString()
             return AuthMessage(origin, requestId)
         }
         /**
@@ -40,7 +40,7 @@ class AuthMessage @Inject constructor(
                 // Fallback to JSON renderer
                 val json = JSONObject(stringContents)
                 val origin = json.get("origin").toString()
-                val requestId = json.get("requestId").toString().toDouble()
+                val requestId = json.get("requestId").toString()
                 return AuthMessage(origin, requestId)
             }
         }

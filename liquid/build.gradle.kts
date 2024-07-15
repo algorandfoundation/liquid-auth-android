@@ -81,6 +81,9 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:$okhttpVersion")
     implementation("ru.gildor.coroutines:kotlin-coroutines-okhttp:1.0")
 
+    // UUID Generator
+    implementation("com.fasterxml.uuid:java-uuid-generator:5.1.0")
+
     // Dev Dependencies
     testImplementation("junit:junit:4.13.2")
     testImplementation("io.mockk:mockk:1.12.0")

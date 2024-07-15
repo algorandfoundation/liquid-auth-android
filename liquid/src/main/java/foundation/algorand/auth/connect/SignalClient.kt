@@ -48,7 +48,7 @@ class SignalClient @Inject constructor(
 ) : SignalInterface {
     companion object {
         const val TAG = "connect.SignalClient"
-        fun generateRequestId(): Double {
+        fun generateRequestId(): String {
             return SignalInterface.generateRequestId()
         }
     }
@@ -62,7 +62,7 @@ class SignalClient @Inject constructor(
      * Generate a random Request ID
      * @TODO: Replace with UUID
      */
-    override fun generateRequestId(): Double {
+    override fun generateRequestId(): String {
         return SignalClient.generateRequestId()
     }
 
@@ -70,7 +70,7 @@ class SignalClient @Inject constructor(
      * Generate a QR Code
      */
     override fun qrCode(
-        requestId: Double,
+        requestId: String,
         logo: Bitmap?,
         logoSize: Int?,
         color: String?,
@@ -99,7 +99,7 @@ class SignalClient @Inject constructor(
      *
      * The type parameter is used to specify the type of remote peer
      */
-    override suspend fun peer(requestId: Double, type: String, iceServers: List<PeerConnection.IceServer>?): DataChannel? {
+    override suspend fun peer(requestId: String, type: String, iceServers: List<PeerConnection.IceServer>?): DataChannel? {
         createSocket()
         return suspendCoroutine { continuation ->
             scope.launch {
@@ -230,7 +230,7 @@ class SignalClient @Inject constructor(
     }
 
     override suspend fun link(
-        requestId: Double
+        requestId: String
     ): LinkMessage {
         return suspendCoroutine { continuation ->
             val linkBody = JSONObject()
