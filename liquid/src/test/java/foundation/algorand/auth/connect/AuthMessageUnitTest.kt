@@ -21,7 +21,7 @@ class AuthMessageUnitTest {
         val origin = "https://localhost:3000"
         val requestId = SignalClient.generateRequestId()
         val message = AuthMessage.fromString("{\"requestId\":\"$requestId\", \"origin\":\"$origin\"}")
-        assertEquals(requestId, message.requestId, 0.0)
+        assertEquals(requestId, message.requestId)
         assertEquals(origin, message.origin)
     }
     @Test
@@ -34,7 +34,7 @@ class AuthMessageUnitTest {
         every { Uri.parse(any()).host } returns origin.replace("liquid://", "")
         every { Uri.parse(any()).query } returns "requestId=$requestId"
         val message = AuthMessage.fromUri(Uri.parse("liquid://$origin/?requestId=$requestId"))
-        assertEquals(requestId, message.requestId, 0.0)
+        assertEquals(requestId, message.requestId)
         assertEquals(message.origin, "https://localhost")
     }
 
@@ -46,14 +46,14 @@ class AuthMessageUnitTest {
 
         // Mocks
         val barcode = mockk<Barcode>()
-        every{barcode.displayValue} returns "liquid://$origin/?requestId=$requestId"
+        every { barcode.displayValue } returns "liquid://$origin/?requestId=$requestId"
         mockkStatic(Uri::class)
         every { Uri.parse(any()).host } returns origin.replace("liquid://", "")
         every { Uri.parse(any()).query } returns "requestId=$requestId"
 
         // Parse Message
         val message = AuthMessage.fromBarcode(barcode)
-        assertEquals(requestId, message.requestId, 0.0)
+        assertEquals(requestId, message.requestId)
         assertEquals(message.origin, "https://localhost")
     }
 
