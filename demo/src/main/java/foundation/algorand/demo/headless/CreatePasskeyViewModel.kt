@@ -116,13 +116,14 @@ class CreatePasskeyViewModel(): ViewModel() {
 
         // Generate a credentialId
         val credentialId = credentialRepository.generateCredentialId()
-        // Generate a credential key pair
-        val keyPair = credentialRepository.getKeyPair(context, credentialId)
 
         val requestJson = JSONObject(publicKeyRequest.requestJson)
         val userJson = requestJson.getJSONObject("user")
         val name = userJson.get("name").toString()
         val userId = userJson.get("id").toString()
+
+        // Generate a credential key pair
+        val keyPair = credentialRepository.getDeterministicKeyPair(context, credentialId, userId, request.callingAppInfo.origin!!)
 
         // Save passkey in your database as per your own implementation
         viewModelScope.launch {

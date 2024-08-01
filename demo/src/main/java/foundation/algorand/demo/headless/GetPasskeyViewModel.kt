@@ -101,10 +101,7 @@ class GetPasskeyViewModel: ViewModel() {
         val keyPair = credentialRepository.getKeyPair(context, credId)
 
         //TODO: Fix signature issues
-        val sig = Signature.getInstance("SHA256withECDSA")
-        sig.initSign(keyPair.private as ECPrivateKey )
-        sig.update(response.dataToSign())
-        response.signature = sig.sign()
+        response.signature = credentialRepository.sign(keyPair, response.dataToSign())
         val options = request.credentialOptions[0] as GetPublicKeyCredentialOption
         val json = options.requestJson
         val requestJson = JSONObject(json)

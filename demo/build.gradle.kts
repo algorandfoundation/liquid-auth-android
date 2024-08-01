@@ -78,6 +78,10 @@ dependencies {
     implementation("androidx.credentials:credentials:1.2.2")
     implementation("androidx.credentials:credentials-play-services-auth:1.2.2")
 
+    // Deterministic Passkeys
+    implementation(files("libs/dP256.jar"))
+    implementation("cash.z.ecc.android:kotlin-bip39:1.0.8")
+
     // Kotlin Coroutine
     val coroutineVersion by extra { "1.7.1" }
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:$coroutineVersion")
