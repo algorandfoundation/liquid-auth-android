@@ -20,6 +20,7 @@ import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import foundation.algorand.demo.credential.CredentialRepository
 import org.json.JSONObject
+import java.security.KeyPair
 import java.security.Signature
 import java.security.interfaces.ECPrivateKey
 import kotlin.io.encoding.Base64
@@ -98,7 +99,17 @@ class GetPasskeyViewModel: ViewModel() {
             packageName = packageName,
             clientDataHash = clientDataHash!!
         )
+
         val keyPair = credentialRepository.getKeyPair(context, credId)
+            ?: throw Error("No keypair corresponding to that credential id!")
+       // FIXME：add proper error handling!
+
+        // NOTE:
+        // We are assuming that a passkey has already been created and stored under the credId
+        // Ideally we could simply recreate the passkey at this stage, but it is not necessarily
+        // the case that the authenticating website will pass along the userId. The WebAuthn
+        // demo website do pass along the userId for the registration phase, but then only the
+        // credential id in subseqent attempts to authenticate.
 
         //TODO: Fix signature issues
         response.signature = credentialRepository.sign(keyPair, response.dataToSign())

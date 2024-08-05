@@ -23,15 +23,12 @@ interface CredentialRepository {
     fun saveDerivedParentSecret(context: Context, mnemonic: CharArray)
     fun getDatabase(context: Context): CredentialDatabase
     fun getDerivedParentSecret(context: Context): Credential?
-    fun generateCredentialId(): ByteArray
-    fun getKeyPair(context: Context): KeyPair
-    fun getKeyPair(context: Context, credentialId: ByteArray): KeyPair
-    fun getDeterministicKeyPair(
+    fun generateCredentialId(keyPair: KeyPair): ByteArray
+    fun getKeyPair(
             context: Context,
-            credentialId: ByteArray,
-            origin: String,
-            userId: String
-    ): KeyPair
+            credentialId: ByteArray
+    ): KeyPair?
+    fun createDeterministicKeyPair(context: Context, origin: String, userId: String): KeyPair
     fun appInfoToOrigin(info: CallingAppInfo): String
     fun getCredential(context: Context, credentialId: ByteArray): Credential?
     fun getCredentialByOrigin(context: Context, origin: String): Credential?
@@ -89,10 +86,22 @@ class Repository() : CredentialRepository {
         }
         return db
     }
-    override fun generateCredentialId(): ByteArray {
+
+    // CredentialId is deterministically generated from the public key
+    // Taking SHA-256 hash of the public key, giving us a 32-byte credentialId
+    override fun generateCredentialId(keyPair: KeyPair): ByteArray {
         Log.d(TAG, "generateCredentialId()")
-        val credentialId = ByteArray(32)
-        SecureRandom().nextBytes(credentialId)
+
+        // val credentialId = ByteArray(32)
+        // SecureRandom().nextBytes(credentialId)
+
+        // Get the public key bytes
+        val publicKeyBytes = keyPair.public.encoded
+
+        // Compute SHA-256 hash of the public key
+        val messageDigest = MessageDigest.getInstance("SHA-256")
+        val credentialId = messageDigest.digest(publicKeyBytes)
+
         return credentialId
     }
 
@@ -121,39 +130,41 @@ class Repository() : CredentialRepository {
         }
         return null
     }
+    /*
     override fun getKeyPair(context: Context): KeyPair {
         return getKeyPair(context, generateCredentialId())
     }
+     */
 
-    override fun getKeyPair(context: Context, credentialId: ByteArray): KeyPair {
+    override fun getKeyPair(
+            context: Context,
+            credentialId: ByteArray
+    ): KeyPair? {
         Log.d(TAG, "getKeyPair($context, $credentialId)")
-        val savedKeyPair = getKeyPairFromDatabase(context, credentialId)
-        if (savedKeyPair != null) {
-            return savedKeyPair
-        }
+        return getKeyPairFromDatabase(context, credentialId)
 
-        generator.initialize(ECGenParameterSpec("secp256r1"))
-        return generator.generateKeyPair()
+        // if (savedKeyPair != null) {
+        //      return savedKeyPair
+        // }
+
+        // generator.initialize(ECGenParameterSpec("secp256r1"))
+        // return generator.generateKeyPair()
+
+        //return createDeterministicKeyPair(context, origin, userId)
     }
 
-    override fun getDeterministicKeyPair(
+    override fun createDeterministicKeyPair(
             context: Context,
-            credentialId: ByteArray,
             origin: String,
             userId: String
     ): KeyPair {
-        Log.d(TAG, "getDeterministicKeyPair($context, $credentialId, $origin, $userId)")
-        // val savedKeyPair = getKeyPairFromDatabase(context, credentialId)
-        // if (savedKeyPair != null) {
-        //    return savedKeyPair
-        // }
+        Log.d(TAG, "getDeterministicKeyPair($context, , $origin, $userId)")
 
-        // Hardcoded for experimenting
-        // NOT SAFE
-        val derivedParentSecret =
-                dP256.genRootSeedWithBIP39(
-                        "salon zoo engage submit smile frost later decide wing sight chaos renew lizard rely canal coral scene hobby scare step bus leaf tobacco slice"
-                )
+        // FIXME:
+        // We are hijacking the Credential data model and using the private key field to hold the
+        // secret.
+        val derivedParentSecret = getDerivedParentSecret(context)!!.privateKey.toByteArray()
+
         // generator.initialize(ECGenParameterSpec("secp256r1"))
         // return generator.generateKeyPair()
         return dP256.genDomainSpecificKeypair(derivedParentSecret, origin, userId)

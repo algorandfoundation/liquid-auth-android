@@ -8,6 +8,7 @@ import android.view.ViewGroup
 import androidx.fragment.app.DialogFragment
 import foundation.algorand.demo.credential.CredentialRepository
 import foundation.algorand.demo.databinding.FragmentPassKeysMnemonicDialogBinding
+// import cash.z.ecc.android.bip39.Mnemonics
 
 class PassKeysMnemonicDialogFragment : DialogFragment() {
   companion object {
@@ -34,8 +35,9 @@ class PassKeysMnemonicDialogFragment : DialogFragment() {
   }
 
   private fun generateNewMnemonic() {
-    val mnemonic =
-            "salon zoo engage submit smile frost later decide wing sight chaos renew lizard rely canal coral scene hobby scare step bus leaf tobacco slice"
+    val mnemonic = "salon zoo engage submit smile frost later decide wing sight chaos renew lizard rely canal coral scene hobby scare step bus leaf tobacco slice"
+    // val mnemonic = Mnemonics.MnemonicCode(Mnemonics.WordCount.COUNT_24).joinToString(" ")
+
     binding.mnemonicInputField.setText(mnemonic)
   }
 
