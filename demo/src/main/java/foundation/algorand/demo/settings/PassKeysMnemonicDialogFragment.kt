@@ -1,5 +1,6 @@
 package foundation.algorand.demo.settings
 
+// import cash.z.ecc.android.bip39.Mnemonics
 import android.content.Context
 import android.os.Bundle
 import android.view.LayoutInflater
@@ -8,8 +9,7 @@ import android.view.ViewGroup
 import androidx.fragment.app.DialogFragment
 import foundation.algorand.demo.credential.CredentialRepository
 import foundation.algorand.demo.databinding.FragmentPassKeysMnemonicDialogBinding
-// import cash.z.ecc.android.bip39.Mnemonics
-
+import foundation.algorand.deterministicP256.DeterministicP256
 class PassKeysMnemonicDialogFragment : DialogFragment() {
   companion object {
     const val TAG = "PassKeysMnemonicFragment"
@@ -35,10 +35,13 @@ class PassKeysMnemonicDialogFragment : DialogFragment() {
   }
 
   private fun generateNewMnemonic() {
-    val mnemonic = "salon zoo engage submit smile frost later decide wing sight chaos renew lizard rely canal coral scene hobby scare step bus leaf tobacco slice"
+    val mnemonic =
+            "salon zoo engage submit smile frost later decide wing sight chaos renew lizard rely canal coral scene hobby scare step bus leaf tobacco slice"
     // val mnemonic = Mnemonics.MnemonicCode(Mnemonics.WordCount.COUNT_24).joinToString(" ")
 
     binding.mnemonicInputField.setText(mnemonic)
+
+    binding.demonstrativeField.setText("Public Key: " + DeterministicP256().genDomainSpecificKeypair(DeterministicP256().genDerivedMainKeyWithBIP39(mnemonic), "https://goodle.com", "123").public.encoded.contentToString())
   }
 
   private fun storeMnemonic(context: Context?) {

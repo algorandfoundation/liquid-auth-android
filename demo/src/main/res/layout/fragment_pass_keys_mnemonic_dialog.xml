@@ -32,5 +32,13 @@
             android:text="Store Mnemonic"
             android:padding="8dp"
             android:layout_marginTop="16dp" />
+
+        <TextView
+            android:id="@+id/demonstrativeField"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:padding="8dp"
+            android:layout_marginTop="16dp" />
     </LinearLayout>
 </layout>

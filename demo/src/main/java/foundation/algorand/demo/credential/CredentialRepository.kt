@@ -72,7 +72,7 @@ class Repository() : CredentialRepository {
                                 origin = "derivedParentSecret",
                                 publicKey = "",
                                 privateKey =
-                                        dP256.genRootSeedWithBIP39(mnemonic.concatToString())
+                                        dP256.genDerivedMainKeyWithBIP39(mnemonic.concatToString())
                                                 .contentToString(),
                                 count = 0,
                         )
