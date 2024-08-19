@@ -63,6 +63,15 @@ android {
 
 dependencies {
     implementation(project(mapOf("path" to ":liquid")))
+    implementation(files("libs/provider-debug.aar"))
+    implementation(files("libs/crypto-debug.aar"))
+    implementation("com.fasterxml.uuid:java-uuid-generator:5.1.0")
+
+
+    implementation("com.fasterxml.jackson.core:jackson-annotations:2.16.1")
+    implementation("org.msgpack:jackson-dataformat-msgpack:0.9.8")
+    implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-cbor:2.16.1")
+    implementation("net.pwall.json:json-kotlin-schema:0.46")
 
     // Algorand SDK
     implementation("com.algorand:algosdk:2.4.0")
