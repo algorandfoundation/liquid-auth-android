@@ -113,7 +113,7 @@ dependencies {
     implementation("com.squareup.okhttp3:logging-interceptor:$okhttpVersion")
     implementation("ru.gildor.coroutines:kotlin-coroutines-okhttp:1.0")
     implementation("io.socket:socket.io-client:2.1.0")
-    implementation("org.webrtc:google-webrtc:1.0.32006")
+    implementation("io.getstream:stream-webrtc-android:1.1.3")
 
     // Core
     implementation("androidx.core:core-ktx:1.12.0")
