@@ -63,8 +63,6 @@ import kotlin.coroutines.suspendCoroutine
 import com.fasterxml.uuid.Generators
 import foundation.algorand.crypto.EncoderType
 import foundation.algorand.provider.Message
-import foundation.algorand.provider.avm.models.SignMessageParams
-import foundation.algorand.provider.avm.models.SignMessageResult
 import foundation.algorand.provider.avm.models.SignTransactionsResult
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
@@ -507,11 +505,12 @@ class AnswerActivity : AppCompatActivity() {
         val keyPair = KeyPairs.getKeyPair(wallet.selected.value!!.toMnemonic())
         try {
             // TODO: Refactor to ByteArray and allow streaming of the Buffer
-            val result = provider.handleRequestMessage(Message(Base64.UrlSafe.decode(msgStr), EncoderType.CBOR), keyPair)
+            val resultMessage = provider.handleRequestMessage(Message(Base64.UrlSafe.decode(msgStr), EncoderType.CBOR), keyPair)
             // TODO: Biometrics prompt for transactions
-            when (result) {
+            when (resultMessage.result) {
                 is SignTransactionsResult -> {
-                    signalService!!.send(Base64.UrlSafe.encode(result.toByteArray(EncoderType.CBOR)))
+                    signalService!!.send(Base64.UrlSafe.encode(resultMessage.toByteArray(EncoderType.CBOR)))
+//                    signalService!!.send("hello")
                 }
                 // TODO: support the rest of the messages
                 else -> {
