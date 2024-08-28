@@ -63,6 +63,8 @@ import kotlin.coroutines.suspendCoroutine
 import com.fasterxml.uuid.Generators
 import foundation.algorand.crypto.EncoderType
 import foundation.algorand.provider.Message
+import foundation.algorand.provider.avm.models.RequestMessage
+import foundation.algorand.provider.avm.models.SignTransactionsParams
 import foundation.algorand.provider.avm.models.SignTransactionsResult
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
@@ -458,7 +460,7 @@ class AnswerActivity : AppCompatActivity() {
     /**
      * Transaction Biometric Prompt
      */
-    private suspend fun biometrics(txn: Transaction): BiometricPrompt.AuthenticationResult? {
+    private suspend fun biometrics(message: SignTransactionsParams): BiometricPrompt.AuthenticationResult? {
         return suspendCoroutine { continuation ->
             var biometricPrompt = BiometricPrompt(this@AnswerActivity, ContextCompat.getMainExecutor(this@AnswerActivity),
                 object : BiometricPrompt.AuthenticationCallback() {
@@ -475,11 +477,9 @@ class AnswerActivity : AppCompatActivity() {
                     }
                 })
             promptInfo = BiometricPrompt.PromptInfo.Builder()
-                .setTitle("${txn.type} Transaction ${txn.assetIndex}")
+                .setTitle("Transaction(s) ${message.txns.size}")
                 .setSubtitle(
-                    "From: ${txn.sender.toString().substring(0, 4)} To: ${
-                        txn.receiver.toString().substring(0, 4)
-                    } Amount: ${txn.amount}"
+                    "Provider: ${message.providerId}"
                 )
                 .setNegativeButtonText("Cancel")
                 .build()
@@ -505,18 +505,27 @@ class AnswerActivity : AppCompatActivity() {
         val keyPair = KeyPairs.getKeyPair(wallet.selected.value!!.toMnemonic())
         try {
             // TODO: Refactor to ByteArray and allow streaming of the Buffer
-            val resultMessage = provider.handleRequestMessage(Message(Base64.UrlSafe.decode(msgStr), EncoderType.CBOR), keyPair)
-            // TODO: Biometrics prompt for transactions
-            when (resultMessage.result) {
-                is SignTransactionsResult -> {
-                    signalService!!.send(Base64.UrlSafe.encode(resultMessage.toByteArray(EncoderType.CBOR)))
-//                    signalService!!.send("hello")
-                }
-                // TODO: support the rest of the messages
-                else -> {
-                    TODO("Not Implemented")
+            val message = Message(Base64.UrlSafe.decode(msgStr), EncoderType.CBOR)
+            val request = provider.encoder.decode<RequestMessage>(message.data, message.encoding)
+            if (request.reference == "arc0027:sign_transactions:request"){
+                lifecycleScope.launch {
+                    val params = provider.encoder.decode<SignTransactionsParams>(
+                        provider.encoder.encode(request.params, EncoderType.NONE), EncoderType.NONE
+                    )
+                    biometrics(params)
+                    val resultMessage = provider.handleRequestMessage(message, keyPair)
+                    when (resultMessage.result) {
+                        is SignTransactionsResult -> {
+                            signalService!!.send(Base64.UrlSafe.encode(resultMessage.toByteArray(EncoderType.CBOR)))
+                        }
+                        // TODO: support the rest of the messages
+                        else -> {
+                            TODO("Not Implemented")
+                        }
+                    }
                 }
             }
+
         } catch (e: Throwable) {
             Log.e(TAG, "Error: $e")
             runOnUiThread {
