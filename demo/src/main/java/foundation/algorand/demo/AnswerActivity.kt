@@ -35,23 +35,22 @@ import foundation.algorand.auth.Cookie
 import foundation.algorand.auth.connect.AuthMessage
 import foundation.algorand.auth.connect.SignalClient
 import foundation.algorand.auth.connect.SignalService
-import foundation.algorand.auth.crypto.decodeBase64
 import foundation.algorand.auth.fido2.AssertionApi
 import foundation.algorand.auth.fido2.AttestationApi
 import foundation.algorand.auth.fido2.toPublicKeyCredentialCreationOptions
 import foundation.algorand.auth.fido2.toPublicKeyCredentialRequestOptions
+import foundation.algorand.crypto.avm.KeyPairs
 import foundation.algorand.demo.credential.CredentialRepository
 import foundation.algorand.demo.credential.db.Credential
 import foundation.algorand.demo.credential.db.CredentialDatabase
-import foundation.algorand.demo.crypto.KeyPairs
 import foundation.algorand.demo.databinding.ActivityAnswerBinding
+import foundation.algorand.demo.provider.AVMProvider
 import foundation.algorand.demo.settings.AccountDialogFragment
 import foundation.algorand.demo.settings.NotificationsDialogFragment
 import foundation.algorand.demo.settings.SettingsDialogFragment
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import okhttp3.OkHttpClient
-import org.apache.commons.codec.binary.Base64
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.json.JSONArray
 import org.json.JSONObject
@@ -61,6 +60,15 @@ import ru.gildor.coroutines.okhttp.await
 import java.security.Security
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
+import com.fasterxml.uuid.Generators
+import foundation.algorand.crypto.EncoderType
+import foundation.algorand.provider.Message
+import foundation.algorand.provider.avm.models.RequestMessage
+import foundation.algorand.provider.avm.models.ResponseMessage
+import foundation.algorand.provider.avm.models.SignTransactionsParams
+import foundation.algorand.provider.avm.models.SignTransactionsResult
+import kotlin.io.encoding.Base64
+import kotlin.io.encoding.ExperimentalEncodingApi
 
 class AnswerActivity : AppCompatActivity() {
     companion object {
@@ -122,6 +130,13 @@ class AnswerActivity : AppCompatActivity() {
     private val userAgent = "${BuildConfig.APPLICATION_ID}/${BuildConfig.VERSION_NAME} " +
             "(Android ${Build.VERSION.RELEASE}; ${Build.MODEL}; ${Build.BRAND})"
     private var signature: ByteArray? = null
+
+    // Datachannel Provider/Handler
+    val uuidGenerator = Generators.timeBasedEpochRandomGenerator()
+
+    // Must be unique to this provider
+    val providerId = uuidGenerator.generate().toString()
+    private val provider = AVMProvider(providerId)
 
     // Register/Attestation Intent Launcher
     private val attestationIntentLauncher = registerForActivityResult(
@@ -446,7 +461,7 @@ class AnswerActivity : AppCompatActivity() {
     /**
      * Transaction Biometric Prompt
      */
-    private suspend fun biometrics(txn: Transaction): BiometricPrompt.AuthenticationResult? {
+    private suspend fun biometrics(message: SignTransactionsParams): BiometricPrompt.AuthenticationResult? {
         return suspendCoroutine { continuation ->
             var biometricPrompt = BiometricPrompt(this@AnswerActivity, ContextCompat.getMainExecutor(this@AnswerActivity),
                 object : BiometricPrompt.AuthenticationCallback() {
@@ -463,11 +478,9 @@ class AnswerActivity : AppCompatActivity() {
                     }
                 })
             promptInfo = BiometricPrompt.PromptInfo.Builder()
-                .setTitle("${txn.type} Transaction ${txn.assetIndex}")
+                .setTitle("Transaction(s) ${message.txns.size}")
                 .setSubtitle(
-                    "From: ${txn.sender.toString().substring(0, 4)} To: ${
-                        txn.receiver.toString().substring(0, 4)
-                    } Amount: ${txn.amount}"
+                    "Provider: ${message.providerId}"
                 )
                 .setNegativeButtonText("Cancel")
                 .build()
@@ -478,8 +491,9 @@ class AnswerActivity : AppCompatActivity() {
     /**
      * Decode Unsigned Transaction
      */
+    @OptIn(ExperimentalEncodingApi::class)
     private fun decodeUnsignedTransaction(unsignedTxn: String): Transaction? {
-        return Encoder.decodeFromMsgPack(unsignedTxn.decodeBase64(), Transaction::class.java)
+        return Encoder.decodeFromMsgPack(Base64.decode(unsignedTxn), Transaction::class.java)
     }
 
     /**
@@ -487,61 +501,36 @@ class AnswerActivity : AppCompatActivity() {
      *
      * Callback for datachannel messages
      */
+    @OptIn(ExperimentalEncodingApi::class)
     private fun handleMessages(msgStr: String) {
         val keyPair = KeyPairs.getKeyPair(wallet.selected.value!!.toMnemonic())
         try {
-            val message = JSONObject(msgStr)
-            if (message.get("type") == "transaction") {
+            val message = Message(Base64.UrlSafe.decode(msgStr), EncoderType.CBOR)
+            val request = provider.encoder.decode<RequestMessage>(message.data, message.encoding)
+            if (request.reference == "arc0027:sign_transactions:request"){
                 lifecycleScope.launch {
-                    // Decode the Transaction
-                    val txn = decodeUnsignedTransaction(message.get("txn").toString())
-                    // Display a biometric prompt with some transaction details
-                    val biometricResult = biometrics(txn!!)
-                    if (biometricResult !== null) {
-                        val bytes = txn.bytesToSign()
-                        val signatureBytes = KeyPairs.rawSignBytes(bytes, keyPair.private)
-                        val sig = Base64.encodeBase64URLSafeString(signatureBytes)
-                        val responseObj = JSONObject()
-                        responseObj.put("sig", sig)
-                        responseObj.put("txId", txn.txID())
-                        responseObj.put("type", "transaction-signature")
-                        signalService!!.send(responseObj.toString())
-                        signalService!!.notify(
-                            notifications.createNotificationBuilder(this@AnswerActivity)
-                                .setOnlyAlertOnce(true)
-                                .setContentIntent(signalService!!.createPendingIntent(AnswerActivity::class.java))
-                            ,
-                            NotificationViewModel.SERVICE_NOTIFICATION_ID
-                        )
-                        // Is Notification Intent(not Deep Link)
-                        if (intent?.data == null && signalService!!.isDeepLink) {
-                            intent?.let { deepLinkIntent ->
-                                if (deepLinkIntent.getStringExtra("msg") !== null) {
-                                    signalService!!.lastKnownReferer?.let { referer ->
-                                        this@AnswerActivity.finish()
-                                        val browserIntent = packageManager.getLaunchIntentForPackage(
-                                            referer.replace(
-                                                "android-app://",
-                                                ""
-                                            )
-                                        )
-                                        browserIntent?.let { openBrowser ->
-                                            openBrowser.setFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
-                                            startActivity(browserIntent)
-                                        }
-                                    }
-                                }
-                            }
+                    val params = provider.encoder.decode<SignTransactionsParams>(
+                        provider.encoder.encode(request.params, EncoderType.NONE), EncoderType.NONE
+                    )
+                    biometrics(params)
+                    provider.setKeyPair(keyPair)
+                    val resultMessage = provider.handleMessage(message) as ResponseMessage
+                    when (resultMessage.result) {
+                        is SignTransactionsResult -> {
+                            signalService!!.send(Base64.UrlSafe.encode(resultMessage.toByteArray(EncoderType.CBOR)))
+                        }
+                        else -> {
+                            TODO("Not Implemented")
                         }
                     }
                 }
-            } else {
-                runOnUiThread {
-                    Toast.makeText(this@AnswerActivity, msgStr, Toast.LENGTH_SHORT).show()
-                }
             }
-        } catch (e: Exception) {
+
+        } catch (e: Throwable) {
             Log.e(TAG, "Error: $e")
+            runOnUiThread {
+                Toast.makeText(this@AnswerActivity, "Error: $msgStr", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
@@ -566,7 +555,7 @@ class AnswerActivity : AppCompatActivity() {
                     } else {
                         Toast.makeText(this@AnswerActivity, "Android 14 Required", Toast.LENGTH_LONG).show()
                     }
-                // Handle Liquid Auth URI
+                    // Handle Liquid Auth URI
                 } else {
                     // Decode Barcode Message
                     val msg = AuthMessage.fromBarcode(barcode)
@@ -646,6 +635,7 @@ class AnswerActivity : AppCompatActivity() {
      * Handles the ActivityResult from a FIDO2 Intent and submits
      * the Authenticator's PublicKeyCredential to the FIDO2 Server
      */
+    @OptIn(ExperimentalEncodingApi::class)
     private fun handleAuthenticatorAttestationResult(activityResult: ActivityResult) {
         val bytes = activityResult.data?.getByteArrayExtra(Fido.FIDO2_KEY_CREDENTIAL_EXTRA)
 
@@ -679,7 +669,7 @@ class AnswerActivity : AppCompatActivity() {
                     liquidExtJSON.put("type", "algorand")
                     liquidExtJSON.put("requestId", msg.requestId)
                     liquidExtJSON.put("address", account.address.toString())
-                    liquidExtJSON.put("signature", Base64.encodeBase64URLSafeString(signature!!))
+                    liquidExtJSON.put("signature", Base64.encode(signature!!))
                     liquidExtJSON.put("device", Build.MODEL)
 
                     lifecycleScope.launch {
