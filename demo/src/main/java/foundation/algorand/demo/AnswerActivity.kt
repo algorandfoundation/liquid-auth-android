@@ -64,6 +64,7 @@ import com.fasterxml.uuid.Generators
 import foundation.algorand.crypto.EncoderType
 import foundation.algorand.provider.Message
 import foundation.algorand.provider.avm.models.RequestMessage
+import foundation.algorand.provider.avm.models.ResponseMessage
 import foundation.algorand.provider.avm.models.SignTransactionsParams
 import foundation.algorand.provider.avm.models.SignTransactionsResult
 import kotlin.io.encoding.Base64
@@ -504,7 +505,6 @@ class AnswerActivity : AppCompatActivity() {
     private fun handleMessages(msgStr: String) {
         val keyPair = KeyPairs.getKeyPair(wallet.selected.value!!.toMnemonic())
         try {
-            // TODO: Refactor to ByteArray and allow streaming of the Buffer
             val message = Message(Base64.UrlSafe.decode(msgStr), EncoderType.CBOR)
             val request = provider.encoder.decode<RequestMessage>(message.data, message.encoding)
             if (request.reference == "arc0027:sign_transactions:request"){
@@ -513,12 +513,12 @@ class AnswerActivity : AppCompatActivity() {
                         provider.encoder.encode(request.params, EncoderType.NONE), EncoderType.NONE
                     )
                     biometrics(params)
-                    val resultMessage = provider.handleRequestMessage(message, keyPair)
+                    provider.setKeyPair(keyPair)
+                    val resultMessage = provider.handleMessage(message) as ResponseMessage
                     when (resultMessage.result) {
                         is SignTransactionsResult -> {
                             signalService!!.send(Base64.UrlSafe.encode(resultMessage.toByteArray(EncoderType.CBOR)))
                         }
-                        // TODO: support the rest of the messages
                         else -> {
                             TODO("Not Implemented")
                         }
