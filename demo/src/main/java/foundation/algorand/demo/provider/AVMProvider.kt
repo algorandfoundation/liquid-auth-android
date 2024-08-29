@@ -44,7 +44,7 @@ class AVMProvider(val providerId: String): IBaseProvider {
         }
     }
     /**
-     * Handle a message from a channel
+     * Update the KeyPair
      */
     fun setKeyPair(keyPair: KeyPair) {
         this.keyPair = keyPair
@@ -56,6 +56,10 @@ class AVMProvider(val providerId: String): IBaseProvider {
     private fun decodeUnsignedTransaction(unsignedTxn: String): Transaction? {
         return Encoder.decodeFromMsgPack(Base64.decode(unsignedTxn), Transaction::class.java)
     }
+
+    /**
+     * Process ARC27 Sign Transactions Requests
+     */
     @OptIn(ExperimentalEncodingApi::class)
     fun processSignTransactions(params: SignTransactionsParams): SignTransactionsResult {
         Log.d("AVMProvider", "processSignTransactions")
