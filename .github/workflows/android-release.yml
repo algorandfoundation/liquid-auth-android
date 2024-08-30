@@ -15,8 +15,18 @@ jobs:
     name: Build
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/create-github-app-token@v1
+        id: app-token
+        with:
+          app-id: ${{ secrets.BOT_ID }}
+          private-key: ${{ secrets.BOT_SK }}
       - run: echo "The job was automatically triggered by a ${{ github.event_name }} event."
       - uses: actions/checkout@v3
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+      - run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
       - name: set up JDK 17
         uses: actions/setup-java@v3
         with:
@@ -34,7 +44,7 @@ jobs:
       - name: Semantic Release
         run: npx semantic-release
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
       - name: Merge Release -> Main
         uses: devmasx/merge-branch@854d3ac71ed1e9deb668e0074781b81fdd6e771f
         if: github.ref == 'refs/heads/release/1.x'
@@ -43,4 +53,4 @@ jobs:
           from_branch: release/1.x
           # TODO rename trunk to main
           target_branch: develop
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          github_token: ${{ steps.app-token.outputs.token }}
