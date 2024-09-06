@@ -122,7 +122,7 @@ class SignalService : Service() {
      * Connect to a Peer by Request ID
      */
     suspend fun peer(
-        requestId: Double,
+        requestId: String,
         type: String,
         iceServers: List<PeerConnection.IceServer>,
     ) {

@@ -17,7 +17,7 @@ This app is a simple android application that demonstrates the use of the liquid
 
 #### Prebuild APK
 
-1. Download the [latest release](https://github.com/algorandfoundation/liquid-auth-android/releases/download/v0.2.0/fido2-debug.apk) on an Android device
+1. Download the [latest release](https://github.com/algorandfoundation/liquid-auth-android/releases) on an Android device
 2. You may need to [enable permissions](https://www.androidauthority.com/how-to-install-apks-31494/) to install the app
 
 

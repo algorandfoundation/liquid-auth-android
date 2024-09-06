@@ -1,3 +1,22 @@
+# [1.0.0-canary.5](https://github.com/algorandfoundation/liquid-auth-android/compare/v1.0.0-canary.4...v1.0.0-canary.5) (2024-09-03)
+
+
+### Features
+
+* **demo:** add AVMProvider ([0caba97](https://github.com/algorandfoundation/liquid-auth-android/commit/0caba97cffa1067ec73dfdbddc2a66dbceea0601))
+
+# [1.0.0-canary.4](https://github.com/algorandfoundation/liquid-auth-android/compare/v1.0.0-canary.3...v1.0.0-canary.4) (2024-07-22)
+
+
+### Bug Fixes
+
+* cleaning up Auth Message unit tests ([ee3a95a](https://github.com/algorandfoundation/liquid-auth-android/commit/ee3a95aea6bdb499d5d1356333a0ececbc813975))
+
+
+### Features
+
+* replace requestId double with UUID v7 ([9a3c753](https://github.com/algorandfoundation/liquid-auth-android/commit/9a3c753e0a6f0417600a37338d1e3f4cf6087180))
+
 # [1.0.0-canary.3](https://github.com/algorandfoundation/liquid-auth-android/compare/v1.0.0-canary.2...v1.0.0-canary.3) (2024-06-20)
 
 

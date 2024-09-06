@@ -61,7 +61,7 @@ dependencies {
     implementation("com.google.mlkit:camera:16.0.0-beta3")
     // Signaling Service
     implementation("io.socket:socket.io-client:2.1.0")
-    implementation("org.webrtc:google-webrtc:1.0.32006")
+    implementation("io.getstream:stream-webrtc-android:1.1.3")
     // QR Code Generator
     implementation("io.github.g0dkar:qrcode-kotlin:4.1.1")
 
@@ -80,6 +80,9 @@ dependencies {
     val okhttpVersion by extra { "4.12.0" }
     implementation("com.squareup.okhttp3:okhttp:$okhttpVersion")
     implementation("ru.gildor.coroutines:kotlin-coroutines-okhttp:1.0")
+
+    // UUID Generator
+    implementation("com.fasterxml.uuid:java-uuid-generator:5.1.0")
 
     // Dev Dependencies
     testImplementation("junit:junit:4.13.2")

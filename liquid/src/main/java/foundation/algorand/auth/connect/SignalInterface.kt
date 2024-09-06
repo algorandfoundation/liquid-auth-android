@@ -9,13 +9,14 @@ import org.webrtc.PeerConnection
 import org.webrtc.DataChannel
 import org.webrtc.SessionDescription
 import kotlin.math.floor
+import com.fasterxml.uuid.Generators
 
-class LinkMessage(val requestId: Double, val wallet: String, val credId: String? = null) {
+class LinkMessage(val requestId: String, val wallet: String, val credId: String? = null) {
     companion object {
         const val TAG = "connect.LinkMessage"
         fun fromJson(json: String): LinkMessage {
             val data = JSONObject(json).get("data") as JSONObject
-            val requestId = data.get("requestId").toString().toDouble()
+            val requestId = data.get("requestId").toString()
             val wallet = data.get("wallet").toString()
             val credId = data.get("credId").toString()
             return LinkMessage(requestId, wallet, credId)
@@ -37,27 +38,30 @@ interface SignalInterface {
     val context: Context? // Android Context
 
     companion object {
-        fun generateRequestId(): Double {return floor(Math.random() * 1000000)}
+        fun generateRequestId(): String {
+            val uuid = Generators.timeBasedEpochRandomGenerator().generate()
+            return uuid.toString()
+        }
     }
 
     /**
      * Generate a random Request ID
      */
-    fun generateRequestId(): Double
+    fun generateRequestId(): String
 
     /**
      * Generate a QR Code
      */
-    fun qrCode(requestId: Double, logo: Bitmap?, logoSize: Int? = null, color: String? = null, backgroundColor: String? = null): Bitmap
+    fun qrCode(requestId: String, logo: Bitmap?, logoSize: Int? = null, color: String? = null, backgroundColor: String? = null): Bitmap
 
     /**
      * Top Level Peer Connection
      */
-    suspend fun peer(requestId: Double, type: String, iceServers: List<PeerConnection.IceServer>?): DataChannel?
+    suspend fun peer(requestId: String, type: String, iceServers: List<PeerConnection.IceServer>?): DataChannel?
     /**
      * Waits for a remote client to authenticate with the server
      */
-    suspend fun link(requestId: Double): LinkMessage
+    suspend fun link(requestId: String): LinkMessage
 
     /**
      * Exchange descriptions with the remote client
