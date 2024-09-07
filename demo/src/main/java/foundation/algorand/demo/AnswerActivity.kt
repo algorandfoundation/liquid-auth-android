@@ -61,9 +61,6 @@ import org.json.JSONObject
 import org.webrtc.DataChannel
 import org.webrtc.PeerConnection
 import ru.gildor.coroutines.okhttp.await
-import java.security.Security
-import kotlin.coroutines.resume
-import kotlin.coroutines.suspendCoroutine
 import com.fasterxml.uuid.Generators
 import foundation.algorand.crypto.EncoderType
 import foundation.algorand.provider.Message
@@ -625,34 +622,6 @@ class AnswerActivity : AppCompatActivity() {
                         Toast.makeText(this@AnswerActivity, "Android 14 Required", Toast.LENGTH_LONG).show()
                     }
                     // Handle Liquid Auth URI
-                } else {
-                    // Decode Barcode Message
-                    val msg = AuthMessage.fromBarcode(barcode)
-                    viewModel.setMessage(msg)
-                    signalService!!.updateDeepLinkFlag(false)
-                    signalService?.start(
-                        msg.origin,
-                        httpClient,
-                        notifications.createNotificationBuilder(this@AnswerActivity),
-                        NotificationViewModel.SERVICE_NOTIFICATION_ID,
-                        AnswerActivity::class.java,
-                    )
-                    // Connect to Service
-                    lifecycleScope.launch {
-                        val savedCredential =
-                            credentialRepository.getCredentialByOrigin(this@AnswerActivity, msg.origin)
-                        signalClient = SignalClient(msg.origin, this@AnswerActivity, httpClient)
-                        if (savedCredential === null) {
-                            register(msg)
-                        } else {
-                            Toast.makeText(
-                                            this@AnswerActivity,
-                                            "Android 14 Required",
-                                            Toast.LENGTH_LONG
-                                    )
-                                    .show()
-                        }
-                        // Handle Liquid Auth URI
                     } else {
                         // Decode Barcode Message
                         val msg = AuthMessage.fromBarcode(barcode)
