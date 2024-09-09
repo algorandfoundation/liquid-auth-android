@@ -45,6 +45,7 @@ import foundation.algorand.crypto.avm.KeyPairs
 import foundation.algorand.demo.credential.CredentialRepository
 import foundation.algorand.demo.credential.db.Credential
 import foundation.algorand.demo.credential.db.CredentialDatabase
+import foundation.algorand.demo.derivedSecret.DerivedSecretRepository
 import foundation.algorand.demo.databinding.ActivityAnswerBinding
 import foundation.algorand.demo.provider.AVMProvider
 import foundation.algorand.demo.settings.AccountDialogFragment
@@ -151,6 +152,7 @@ class AnswerActivity : AppCompatActivity() {
     // Data Models
     private lateinit var db: CredentialDatabase
     private val credentialRepository = CredentialRepository() // Handle Credential Operations
+    private val derivedSecretRepository = DerivedSecretRepository()
     private val viewModel: AnswerViewModel by viewModels() // Handle View State
     private val wallet: WalletViewModel by viewModels() // Handle Wallet Operations
     private val notifications: NotificationViewModel by viewModels() // Handle Notifications
@@ -239,7 +241,7 @@ class AnswerActivity : AppCompatActivity() {
 
         val passKeysMnemonicFragment = PassKeysMnemonicDialogFragment()
         if (!passKeysMnemonicFragment.isVisible &&
-                        credentialRepository.getDerivedParentSecret(this@AnswerActivity) == null
+            derivedSecretRepository.getDerivedParentSecret(this@AnswerActivity) == null
         ) {
             passKeysMnemonicFragment.show(supportFragmentManager, "MNEMONIC_INPUT")
         }

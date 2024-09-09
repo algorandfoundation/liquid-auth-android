@@ -7,9 +7,10 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.DialogFragment
 import androidx.lifecycle.lifecycleScope
+import cash.z.ecc.android.bip39.Mnemonics
 import foundation.algorand.demo.credential.CredentialRepository
 import foundation.algorand.demo.databinding.FragmentPassKeysMnemonicDialogBinding
-import foundation.algorand.deterministicP256.DeterministicP256
+import foundation.algorand.demo.derivedSecret.DerivedSecretRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -18,7 +19,8 @@ class PassKeysMnemonicDialogFragment : DialogFragment() {
   companion object {
     const val TAG = "PassKeysMnemonicFragment"
   }
-  private val credentialRepository = CredentialRepository()
+
+  private val derivedSecretRepository = DerivedSecretRepository()
   private var _binding: FragmentPassKeysMnemonicDialogBinding? = null
   private val binding
     get() = _binding!!
@@ -46,40 +48,28 @@ class PassKeysMnemonicDialogFragment : DialogFragment() {
     val mnemonic =
             withContext(Dispatchers.IO) {
               // Generate the mnemonic on a background thread
-              "salon zoo engage submit smile frost later decide wing sight chaos renew lizard rely canal coral scene hobby scare step bus leaf tobacco slice"
-              // val mnemonic = Mnemonics.MnemonicCode(Mnemonics.WordCount.COUNT_24).joinToString("
-              // ")
-            }
-
-    val publicKey =
-            withContext(Dispatchers.IO) {
-              // Generate the public key on a background thread
-              DeterministicP256()
-                      .genDomainSpecificKeypair(
-                              DeterministicP256().genDerivedMainKeyWithBIP39(mnemonic),
-                              "https://google.com",
-                              "123"
-                      )
-                      .public
-                      .encoded
-                      .contentToString()
+              Mnemonics.MnemonicCode(Mnemonics.WordCount.COUNT_24).joinToString(" ")
             }
 
     withContext(Dispatchers.Main) {
       // Update the UI on the main thread
       binding.mnemonicInputField.setText(mnemonic)
-      binding.demonstrativeField.setText("Public Key: $publicKey")
     }
   }
 
   private suspend fun storeMnemonic(context: Context?) {
+    withContext(Dispatchers.Main) { binding.progressBar.visibility = View.VISIBLE }
+
     withContext(Dispatchers.IO) {
       val mnemonic = binding.mnemonicInputField.text.toString().toCharArray()
       // FIXME: Not secure, just saves derivedParentSecret directly to the database
       // The mnemonic is turned into the derivedParentSecret
       context?.let {
-        credentialRepository.saveDerivedParentSecret(it, mnemonic)
-        withContext(Dispatchers.Main) { dismiss() }
+        derivedSecretRepository.saveDerivedParentSecret(it, mnemonic)
+        withContext(Dispatchers.Main) {
+          dismiss()
+          binding.progressBar.visibility = View.GONE
+        }
       }
     }
   }

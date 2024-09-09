@@ -33,12 +33,12 @@
             android:padding="8dp"
             android:layout_marginTop="16dp" />
 
-        <TextView
-            android:id="@+id/demonstrativeField"
-            android:layout_width="match_parent"
+        <ProgressBar
+            android:id="@+id/progressBar"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text=""
-            android:padding="8dp"
-            android:layout_marginTop="16dp" />
+            android:layout_gravity="center"
+            android:visibility="gone" />
+
     </LinearLayout>
 </layout>
