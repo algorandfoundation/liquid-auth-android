@@ -45,8 +45,8 @@ import foundation.algorand.crypto.avm.KeyPairs
 import foundation.algorand.demo.credential.CredentialRepository
 import foundation.algorand.demo.credential.db.Credential
 import foundation.algorand.demo.credential.db.CredentialDatabase
-import foundation.algorand.demo.derivedSecret.DerivedSecretRepository
 import foundation.algorand.demo.databinding.ActivityAnswerBinding
+import foundation.algorand.demo.derivedSecret.DerivedSecretRepository
 import foundation.algorand.demo.provider.AVMProvider
 import foundation.algorand.demo.settings.AccountDialogFragment
 import foundation.algorand.demo.settings.NotificationsDialogFragment
@@ -241,7 +241,7 @@ class AnswerActivity : AppCompatActivity() {
 
         val passKeysMnemonicFragment = PassKeysMnemonicDialogFragment()
         if (!passKeysMnemonicFragment.isVisible &&
-            derivedSecretRepository.getDerivedParentSecret(this@AnswerActivity) == null
+                        derivedSecretRepository.getDerivedParentSecret(this@AnswerActivity) == null
         ) {
             passKeysMnemonicFragment.show(supportFragmentManager, "MNEMONIC_INPUT")
         }

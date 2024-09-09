@@ -25,20 +25,25 @@
             android:padding="8dp"
             android:layout_marginTop="16dp" />
 
-        <Button
-            android:id="@+id/storeButton"
+        <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Store Mnemonic"
-            android:padding="8dp"
-            android:layout_marginTop="16dp" />
+            android:layout_marginTop="16dp">
 
-        <ProgressBar
-            android:id="@+id/progressBar"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:visibility="gone" />
+            <Button
+                android:id="@+id/storeButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Store Mnemonic"
+                android:padding="8dp" />
+
+            <ProgressBar
+                android:id="@+id/progressBar"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:visibility="gone" />
+        </FrameLayout>
 
     </LinearLayout>
 </layout>

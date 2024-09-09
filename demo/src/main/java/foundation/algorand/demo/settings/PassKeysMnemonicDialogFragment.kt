@@ -1,14 +1,18 @@
 package foundation.algorand.demo.settings
 
+import android.app.Dialog
 import android.content.Context
+import android.content.res.ColorStateList
+import android.graphics.Color
 import android.os.Bundle
+import android.text.Editable
+import android.text.TextWatcher
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.DialogFragment
 import androidx.lifecycle.lifecycleScope
 import cash.z.ecc.android.bip39.Mnemonics
-import foundation.algorand.demo.credential.CredentialRepository
 import foundation.algorand.demo.databinding.FragmentPassKeysMnemonicDialogBinding
 import foundation.algorand.demo.derivedSecret.DerivedSecretRepository
 import kotlinx.coroutines.Dispatchers
@@ -24,6 +28,17 @@ class PassKeysMnemonicDialogFragment : DialogFragment() {
   private var _binding: FragmentPassKeysMnemonicDialogBinding? = null
   private val binding
     get() = _binding!!
+
+  override fun onCreate(savedInstanceState: Bundle?) {
+    super.onCreate(savedInstanceState)
+    isCancelable = false // Make the dialog non-cancelable
+  }
+
+  override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
+    val dialog = super.onCreateDialog(savedInstanceState)
+    dialog.setCancelable(false) // Make the dialog non-cancelable
+    return dialog
+  }
 
   override fun onCreateView(
           inflater: LayoutInflater,
@@ -42,6 +57,47 @@ class PassKeysMnemonicDialogFragment : DialogFragment() {
     binding.storeButton.setOnClickListener {
       viewLifecycleOwner.lifecycleScope.launch { storeMnemonic(context) }
     }
+    binding.storeButton.isEnabled = false // Initially disable the store button
+    setupMnemonicInputField()
+  }
+
+  private fun setupMnemonicInputField() {
+    binding.mnemonicInputField.addTextChangedListener(
+            object : TextWatcher {
+              override fun afterTextChanged(s: Editable?) {
+                val words = s.toString()
+                val mnemonic = Mnemonics.MnemonicCode(words)
+                var isValid = false
+                try {
+                  mnemonic.validate()
+                  if (mnemonic.words.size == 24) {
+                    isValid = true
+                  }
+                } catch (e: Exception) {
+                  isValid = false
+                }
+                if (isValid) {
+                  // The mnemonic is valid
+                  binding.mnemonicInputField.backgroundTintList =
+                          ColorStateList.valueOf(Color.GREEN)
+                  binding.storeButton.isEnabled = true
+                } else {
+                  // The mnemonic is invalid
+                  binding.mnemonicInputField.backgroundTintList = ColorStateList.valueOf(Color.RED)
+                  binding.storeButton.isEnabled = false
+                }
+              }
+
+              override fun beforeTextChanged(
+                      s: CharSequence?,
+                      start: Int,
+                      count: Int,
+                      after: Int
+              ) {}
+
+              override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            }
+    )
   }
 
   private suspend fun generateNewMnemonic() {
@@ -58,17 +114,20 @@ class PassKeysMnemonicDialogFragment : DialogFragment() {
   }
 
   private suspend fun storeMnemonic(context: Context?) {
-    withContext(Dispatchers.Main) { binding.progressBar.visibility = View.VISIBLE }
+    withContext(Dispatchers.Main) {
+      binding.storeButton.visibility = View.GONE
+      binding.generateNewMnemonicButton.isEnabled = false // Disable the generate button
+      binding.mnemonicInputField.isEnabled = false // Disable the input field
+      binding.progressBar.visibility = View.VISIBLE
+    }
 
     withContext(Dispatchers.IO) {
       val mnemonic = binding.mnemonicInputField.text.toString().toCharArray()
-      // FIXME: Not secure, just saves derivedParentSecret directly to the database
-      // The mnemonic is turned into the derivedParentSecret
       context?.let {
         derivedSecretRepository.saveDerivedParentSecret(it, mnemonic)
         withContext(Dispatchers.Main) {
-          dismiss()
           binding.progressBar.visibility = View.GONE
+          dismiss() // Dismiss the dialog programmatically
         }
       }
     }
