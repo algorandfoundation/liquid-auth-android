@@ -24,6 +24,7 @@ import androidx.lifecycle.lifecycleScope
 import com.algorand.algosdk.account.Account
 import com.algorand.algosdk.transaction.Transaction
 import com.algorand.algosdk.util.Encoder
+import com.fasterxml.uuid.Generators
 import com.google.android.gms.fido.Fido
 import com.google.android.gms.fido.fido2.Fido2ApiClient
 import com.google.android.gms.fido.fido2.api.common.AuthenticatorErrorResponse
@@ -39,6 +40,7 @@ import foundation.algorand.auth.fido2.AssertionApi
 import foundation.algorand.auth.fido2.AttestationApi
 import foundation.algorand.auth.fido2.toPublicKeyCredentialCreationOptions
 import foundation.algorand.auth.fido2.toPublicKeyCredentialRequestOptions
+import foundation.algorand.crypto.EncoderType
 import foundation.algorand.crypto.avm.KeyPairs
 import foundation.algorand.demo.credential.CredentialRepository
 import foundation.algorand.demo.credential.db.Credential
@@ -49,9 +51,16 @@ import foundation.algorand.demo.settings.AccountDialogFragment
 import foundation.algorand.demo.settings.NotificationsDialogFragment
 import foundation.algorand.demo.settings.PassKeysMnemonicDialogFragment
 import foundation.algorand.demo.settings.SettingsDialogFragment
+import foundation.algorand.provider.Message
+import foundation.algorand.provider.avm.models.RequestMessage
+import foundation.algorand.provider.avm.models.ResponseMessage
+import foundation.algorand.provider.avm.models.SignTransactionsParams
+import foundation.algorand.provider.avm.models.SignTransactionsResult
 import java.security.Security
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
+import kotlin.io.encoding.Base64
+import kotlin.io.encoding.ExperimentalEncodingApi
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import okhttp3.OkHttpClient
@@ -61,15 +70,6 @@ import org.json.JSONObject
 import org.webrtc.DataChannel
 import org.webrtc.PeerConnection
 import ru.gildor.coroutines.okhttp.await
-import com.fasterxml.uuid.Generators
-import foundation.algorand.crypto.EncoderType
-import foundation.algorand.provider.Message
-import foundation.algorand.provider.avm.models.RequestMessage
-import foundation.algorand.provider.avm.models.ResponseMessage
-import foundation.algorand.provider.avm.models.SignTransactionsParams
-import foundation.algorand.provider.avm.models.SignTransactionsResult
-import kotlin.io.encoding.Base64
-import kotlin.io.encoding.ExperimentalEncodingApi
 
 class AnswerActivity : AppCompatActivity() {
     companion object {
@@ -238,7 +238,9 @@ class AnswerActivity : AppCompatActivity() {
         }
 
         val passKeysMnemonicFragment = PassKeysMnemonicDialogFragment()
-        if (!passKeysMnemonicFragment.isVisible) {
+        if (!passKeysMnemonicFragment.isVisible &&
+                        credentialRepository.getDerivedParentSecret(this@AnswerActivity) == null
+        ) {
             passKeysMnemonicFragment.show(supportFragmentManager, "MNEMONIC_INPUT")
         }
 
@@ -521,10 +523,10 @@ class AnswerActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * Transaction Biometric Prompt
-     */
-    private suspend fun biometrics(message: SignTransactionsParams): BiometricPrompt.AuthenticationResult? {
+    /** Transaction Biometric Prompt */
+    private suspend fun biometrics(
+            message: SignTransactionsParams
+    ): BiometricPrompt.AuthenticationResult? {
         return suspendCoroutine { continuation ->
             var biometricPrompt =
                     BiometricPrompt(
@@ -538,25 +540,23 @@ class AnswerActivity : AppCompatActivity() {
                                     continuation.resume(result)
                                 }
 
-                    override fun onAuthenticationFailed() {
-                        super.onAuthenticationFailed()
-                        continuation.resume(null)
-                    }
-                })
-            promptInfo = BiometricPrompt.PromptInfo.Builder()
-                .setTitle("Transaction(s) ${message.txns.size}")
-                .setSubtitle(
-                    "Provider: ${message.providerId}"
-                )
-                .setNegativeButtonText("Cancel")
-                .build()
+                                override fun onAuthenticationFailed() {
+                                    super.onAuthenticationFailed()
+                                    continuation.resume(null)
+                                }
+                            }
+                    )
+            promptInfo =
+                    BiometricPrompt.PromptInfo.Builder()
+                            .setTitle("Transaction(s) ${message.txns.size}")
+                            .setSubtitle("Provider: ${message.providerId}")
+                            .setNegativeButtonText("Cancel")
+                            .build()
             biometricPrompt.authenticate(promptInfo)
         }
     }
 
-    /**
-     * Decode Unsigned Transaction
-     */
+    /** Decode Unsigned Transaction */
     @OptIn(ExperimentalEncodingApi::class)
     private fun decodeUnsignedTransaction(unsignedTxn: String): Transaction? {
         return Encoder.decodeFromMsgPack(Base64.decode(unsignedTxn), Transaction::class.java)
@@ -573,17 +573,23 @@ class AnswerActivity : AppCompatActivity() {
         try {
             val message = Message(Base64.UrlSafe.decode(msgStr), EncoderType.CBOR)
             val request = provider.encoder.decode<RequestMessage>(message.data, message.encoding)
-            if (request.reference == "arc0027:sign_transactions:request"){
+            if (request.reference == "arc0027:sign_transactions:request") {
                 lifecycleScope.launch {
-                    val params = provider.encoder.decode<SignTransactionsParams>(
-                        provider.encoder.encode(request.params, EncoderType.NONE), EncoderType.NONE
-                    )
+                    val params =
+                            provider.encoder.decode<SignTransactionsParams>(
+                                    provider.encoder.encode(request.params, EncoderType.NONE),
+                                    EncoderType.NONE
+                            )
                     biometrics(params)
                     provider.setKeyPair(keyPair)
                     val resultMessage = provider.handleMessage(message) as ResponseMessage
                     when (resultMessage.result) {
                         is SignTransactionsResult -> {
-                            signalService!!.send(Base64.UrlSafe.encode(resultMessage.toByteArray(EncoderType.CBOR)))
+                            signalService!!.send(
+                                    Base64.UrlSafe.encode(
+                                            resultMessage.toByteArray(EncoderType.CBOR)
+                                    )
+                            )
                         }
                         else -> {
                             TODO("Not Implemented")
@@ -591,7 +597,6 @@ class AnswerActivity : AppCompatActivity() {
                     }
                 }
             }
-
         } catch (e: Throwable) {
             Log.e(TAG, "Error: $e")
             runOnUiThread {
@@ -612,16 +617,24 @@ class AnswerActivity : AppCompatActivity() {
      * a user is registering the phone as an Authenticator for the first time.
      */
     private fun connect() {
-        GmsBarcodeScanning.getClient(this@AnswerActivity).startScan()
-            .addOnSuccessListener { barcode ->
-                // Handle any scanned FIDO URI directly
-                if (barcode.displayValue!!.startsWith("FIDO:/")) {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(barcode.displayValue)))
-                    } else {
-                        Toast.makeText(this@AnswerActivity, "Android 14 Required", Toast.LENGTH_LONG).show()
-                    }
-                    // Handle Liquid Auth URI
+        GmsBarcodeScanning.getClient(this@AnswerActivity)
+                .startScan()
+                .addOnSuccessListener { barcode ->
+                    // Handle any scanned FIDO URI directly
+                    if (barcode.displayValue!!.startsWith("FIDO:/")) {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                            startActivity(
+                                    Intent(Intent.ACTION_VIEW, Uri.parse(barcode.displayValue))
+                            )
+                        } else {
+                            Toast.makeText(
+                                            this@AnswerActivity,
+                                            "Android 14 Required",
+                                            Toast.LENGTH_LONG
+                                    )
+                                    .show()
+                        }
+                        // Handle Liquid Auth URI
                     } else {
                         // Decode Barcode Message
                         val msg = AuthMessage.fromBarcode(barcode)
