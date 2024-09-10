@@ -49,6 +49,7 @@ import foundation.algorand.demo.databinding.ActivityAnswerBinding
 import foundation.algorand.demo.derivedSecret.DerivedSecretRepository
 import foundation.algorand.demo.provider.AVMProvider
 import foundation.algorand.demo.settings.AccountDialogFragment
+import foundation.algorand.demo.settings.ManualAddPassKeysDialogFragment
 import foundation.algorand.demo.settings.NotificationsDialogFragment
 import foundation.algorand.demo.settings.PassKeysMnemonicDialogFragment
 import foundation.algorand.demo.settings.SettingsDialogFragment
@@ -280,6 +281,9 @@ class AnswerActivity : AppCompatActivity() {
         binding.lifecycleOwner = this
         binding.viewModel = viewModel
         binding.connectButton.setOnClickListener { connect() }
+        binding.showManualAddPassKeyDialogButton.setOnClickListener {
+            showManualAddPassKeysDialog()
+        }
         setContentView(binding.root)
     }
 
@@ -946,5 +950,11 @@ class AnswerActivity : AppCompatActivity() {
         } else {
             viewModel.setSession(s)
         }
+    }
+
+    /** Show the Manual Add PassKeys Dialog */
+    private fun showManualAddPassKeysDialog() {
+        val dialogFragment = ManualAddPassKeysDialogFragment()
+        dialogFragment.show(supportFragmentManager, ManualAddPassKeysDialogFragment.TAG)
     }
 }

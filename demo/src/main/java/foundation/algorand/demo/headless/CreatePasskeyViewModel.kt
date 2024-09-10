@@ -120,7 +120,7 @@ class CreatePasskeyViewModel(): ViewModel() {
         val userId = userJson.get("id").toString()
 
         // Generate a key pair
-        val keyPair = credentialRepository.createDeterministicKeyPair(context, request.callingAppInfo.origin!!, userId)
+        val keyPair = credentialRepository.createDeterministicKeyPair(context, request.callingAppInfo.origin!!, name)
 
         // Deterministically generate a credentialId
         val credentialId = credentialRepository.generateCredentialId(keyPair)

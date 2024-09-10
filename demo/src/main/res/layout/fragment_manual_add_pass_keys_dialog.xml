@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <EditText
+        android:id="@+id/originInput"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Origin (e.g., https://github.com)"
+        android:inputType="textUri"
+        android:padding="8dp"
+        android:text="https://"
+        android:textSize="16sp" />
+
+    <EditText
+        android:id="@+id/userHandleInput"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="User Handle"
+        android:inputType="text"
+        android:padding="8dp"
+        android:textSize="16sp"
+        android:layout_marginTop="16dp" />
+
+    <Button
+        android:id="@+id/recreateCredentialButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="(Re-)Create Credential"
+        android:padding="8dp"
+        android:layout_marginTop="16dp" />
+</LinearLayout>

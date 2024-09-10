@@ -24,7 +24,7 @@ interface CredentialRepository {
     fun getDatabase(context: Context): CredentialDatabase
     fun generateCredentialId(keyPair: KeyPair): ByteArray
     fun getKeyPair(context: Context, credentialId: ByteArray): KeyPair?
-    fun createDeterministicKeyPair(context: Context, origin: String, userId: String): KeyPair
+    fun createDeterministicKeyPair(context: Context, origin: String, userHandle: String): KeyPair
     fun appInfoToOrigin(info: CallingAppInfo): String
     fun getCredential(context: Context, credentialId: ByteArray): Credential?
     fun getCredentialByOrigin(context: Context, origin: String): Credential?
@@ -114,12 +114,12 @@ class Repository() : CredentialRepository {
     override fun createDeterministicKeyPair(
             context: Context,
             origin: String,
-            userId: String
+            userHandle: String
     ): KeyPair {
-        Log.d(TAG, "createDeterministicKeyPair($context, , $origin, $userId)")
+        Log.d(TAG, "createDeterministicKeyPair($context, , $origin, $userHandle)")
 
         val derivedParentSecret = derivedSecretRepository.getDerivedParentSecret(context)?.derivedSecret!!.toByteArray()
-        return dP256.genDomainSpecificKeypair(derivedParentSecret, origin, userId)
+        return dP256.genDomainSpecificKeypair(derivedParentSecret, origin, userHandle)
     }
 
     override fun sign(keyPair: KeyPair, payload: ByteArray): ByteArray {
