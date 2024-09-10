@@ -65,9 +65,6 @@ class Repository() : CredentialRepository {
     override fun generateCredentialId(keyPair: KeyPair): ByteArray {
         Log.d(TAG, "generateCredentialId()")
 
-        // val credentialId = ByteArray(32)
-        // SecureRandom().nextBytes(credentialId)
-
         // Get the public key bytes
         val publicKeyBytes = keyPair.public.encoded
 
@@ -112,15 +109,6 @@ class Repository() : CredentialRepository {
     override fun getKeyPair(context: Context, credentialId: ByteArray): KeyPair? {
         Log.d(TAG, "getKeyPair($context, $credentialId)")
         return getKeyPairFromDatabase(context, credentialId)
-
-        // if (savedKeyPair != null) {
-        //      return savedKeyPair
-        // }
-
-        // generator.initialize(ECGenParameterSpec("secp256r1"))
-        // return generator.generateKeyPair()
-
-        // return createDeterministicKeyPair(context, origin, userId)
     }
 
     override fun createDeterministicKeyPair(
@@ -128,12 +116,9 @@ class Repository() : CredentialRepository {
             origin: String,
             userId: String
     ): KeyPair {
-        Log.d(TAG, "getDeterministicKeyPair($context, , $origin, $userId)")
+        Log.d(TAG, "createDeterministicKeyPair($context, , $origin, $userId)")
 
         val derivedParentSecret = derivedSecretRepository.getDerivedParentSecret(context)?.derivedSecret!!.toByteArray()
-
-        // generator.initialize(ECGenParameterSpec("secp256r1"))
-        // return generator.generateKeyPair()
         return dP256.genDomainSpecificKeypair(derivedParentSecret, origin, userId)
     }
 
