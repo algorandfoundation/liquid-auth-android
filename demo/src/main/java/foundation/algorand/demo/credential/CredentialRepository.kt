@@ -100,11 +100,6 @@ class Repository() : CredentialRepository {
         }
         return null
     }
-    /*
-    override fun getKeyPair(context: Context): KeyPair {
-        return getKeyPair(context, generateCredentialId())
-    }
-     */
 
     override fun getKeyPair(context: Context, credentialId: ByteArray): KeyPair? {
         Log.d(TAG, "getKeyPair($context, $credentialId)")
@@ -116,10 +111,11 @@ class Repository() : CredentialRepository {
             origin: String,
             userHandle: String
     ): KeyPair {
-        Log.d(TAG, "createDeterministicKeyPair($context, , $origin, $userHandle)")
+        // Note that we take the LOWERCASE of the userHandle, to prevent confusion
+        Log.d(TAG, "createDeterministicKeyPair($context, , $origin, ${userHandle.lowercase()})")
 
         val derivedParentSecret = derivedSecretRepository.getDerivedParentSecret(context)?.derivedSecret!!.toByteArray()
-        return dP256.genDomainSpecificKeypair(derivedParentSecret, origin, userHandle)
+        return dP256.genDomainSpecificKeypair(derivedParentSecret, origin, userHandle.lowercase())
     }
 
     override fun sign(keyPair: KeyPair, payload: ByteArray): ByteArray {
