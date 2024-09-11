@@ -45,22 +45,23 @@
             tools:layout_editor_absoluteY="651dp" />
 
         <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/showManualAddPassKeyDialogButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            app:srcCompat="@drawable/baseline_manual_add_24"
+            app:layout_anchor="@id/bottomAppBar"
+            android:layout_marginEnd="72dp" />
+
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/connectButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             app:srcCompat="@drawable/baseline_qr_code_scanner_24"
             app:layout_anchor="@id/bottomAppBar"
-            android:layout_marginEnd="72dp" /> <!-- Adjust margin to separate buttons -->
-
-        <com.google.android.material.floatingactionbutton.FloatingActionButton
-            android:id="@+id/showManualAddPassKeyDialogButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="bottom|end"
-            android:layout_margin="16dp"
-            app:layout_anchor="@id/bottomAppBar"
             app:layout_anchorGravity="center"
-            app:srcCompat="@drawable/baseline_manual_add_24" />
+            android:layout_marginEnd="16dp"
+            android:layout_marginBottom="8dp"
+            app:elevation="0dp" />
 
     </androidx.coordinatorlayout.widget.CoordinatorLayout>
 </layout>
