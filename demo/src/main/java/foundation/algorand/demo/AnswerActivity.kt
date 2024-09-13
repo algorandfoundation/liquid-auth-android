@@ -24,6 +24,7 @@ import androidx.lifecycle.lifecycleScope
 import com.algorand.algosdk.account.Account
 import com.algorand.algosdk.transaction.Transaction
 import com.algorand.algosdk.util.Encoder
+import com.fasterxml.uuid.Generators
 import com.google.android.gms.fido.Fido
 import com.google.android.gms.fido.fido2.Fido2ApiClient
 import com.google.android.gms.fido.fido2.api.common.AuthenticatorErrorResponse
@@ -39,15 +40,29 @@ import foundation.algorand.auth.fido2.AssertionApi
 import foundation.algorand.auth.fido2.AttestationApi
 import foundation.algorand.auth.fido2.toPublicKeyCredentialCreationOptions
 import foundation.algorand.auth.fido2.toPublicKeyCredentialRequestOptions
+import foundation.algorand.crypto.EncoderType
 import foundation.algorand.crypto.avm.KeyPairs
 import foundation.algorand.demo.credential.CredentialRepository
 import foundation.algorand.demo.credential.db.Credential
 import foundation.algorand.demo.credential.db.CredentialDatabase
 import foundation.algorand.demo.databinding.ActivityAnswerBinding
+import foundation.algorand.demo.derivedSecret.DerivedSecretRepository
 import foundation.algorand.demo.provider.AVMProvider
 import foundation.algorand.demo.settings.AccountDialogFragment
+import foundation.algorand.demo.settings.ManualAddPassKeysDialogFragment
 import foundation.algorand.demo.settings.NotificationsDialogFragment
+import foundation.algorand.demo.settings.PassKeysMnemonicDialogFragment
 import foundation.algorand.demo.settings.SettingsDialogFragment
+import foundation.algorand.provider.Message
+import foundation.algorand.provider.avm.models.RequestMessage
+import foundation.algorand.provider.avm.models.ResponseMessage
+import foundation.algorand.provider.avm.models.SignTransactionsParams
+import foundation.algorand.provider.avm.models.SignTransactionsResult
+import java.security.Security
+import kotlin.coroutines.resume
+import kotlin.coroutines.suspendCoroutine
+import kotlin.io.encoding.Base64
+import kotlin.io.encoding.ExperimentalEncodingApi
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import okhttp3.OkHttpClient
@@ -57,18 +72,6 @@ import org.json.JSONObject
 import org.webrtc.DataChannel
 import org.webrtc.PeerConnection
 import ru.gildor.coroutines.okhttp.await
-import java.security.Security
-import kotlin.coroutines.resume
-import kotlin.coroutines.suspendCoroutine
-import com.fasterxml.uuid.Generators
-import foundation.algorand.crypto.EncoderType
-import foundation.algorand.provider.Message
-import foundation.algorand.provider.avm.models.RequestMessage
-import foundation.algorand.provider.avm.models.ResponseMessage
-import foundation.algorand.provider.avm.models.SignTransactionsParams
-import foundation.algorand.provider.avm.models.SignTransactionsResult
-import kotlin.io.encoding.Base64
-import kotlin.io.encoding.ExperimentalEncodingApi
 
 class AnswerActivity : AppCompatActivity() {
     companion object {
@@ -77,27 +80,71 @@ class AnswerActivity : AppCompatActivity() {
     }
     fun createIceServer(uri: String, username: String, password: String): PeerConnection.IceServer {
         return PeerConnection.IceServer.builder(uri)
-            .setUsername(username)
-            .setPassword(password)
-            .createIceServer()
+                .setUsername(username)
+                .setPassword(password)
+                .createIceServer()
     }
 
     // Liquid Auth Service
-    private val iceServers = listOf(
-        PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer(),
-        PeerConnection.IceServer.builder("stun:stun1.l.google.com:19302").createIceServer(),
-        PeerConnection.IceServer.builder("stun:stun2.l.google.com:19302").createIceServer(),
-        createIceServer("turn:global.turn.nodely.network:80?transport=tcp", BuildConfig.NODELY_TURN_USERNAME, BuildConfig.NODELY_TURN_CREDENTIAL),
-        createIceServer("turns:global.turn.nodely.network:443?transport=tcp", BuildConfig.NODELY_TURN_USERNAME, BuildConfig.NODELY_TURN_CREDENTIAL),
-        createIceServer("turn:eu.turn.nodely.io:80?transport=tcp", BuildConfig.NODELY_TURN_USERNAME, BuildConfig.NODELY_TURN_CREDENTIAL),
-        createIceServer("turns:eu.turn.nodely.io:443?transport=tcp", BuildConfig.NODELY_TURN_USERNAME, BuildConfig.NODELY_TURN_CREDENTIAL),
-        createIceServer("turn:us.turn.nodely.io:80?transport=tcp", BuildConfig.NODELY_TURN_USERNAME, BuildConfig.NODELY_TURN_CREDENTIAL),
-        createIceServer("turns:us.turn.nodely.io:443?transport=tcp", BuildConfig.NODELY_TURN_USERNAME, BuildConfig.NODELY_TURN_CREDENTIAL),
-        createIceServer("turn:global.relay.metered.ca:80", BuildConfig.TURN_USERNAME, BuildConfig.TURN_CREDENTIAL),
-        createIceServer("turn:global.relay.metered.ca:80?transport=tcp", BuildConfig.TURN_USERNAME, BuildConfig.TURN_CREDENTIAL),
-        createIceServer("turn:global.relay.metered.ca:443", BuildConfig.TURN_USERNAME, BuildConfig.TURN_CREDENTIAL),
-        createIceServer("turns:global.relay.metered.ca:443?transport=tcp", BuildConfig.TURN_USERNAME, BuildConfig.TURN_CREDENTIAL)
-    )
+    private val iceServers =
+            listOf(
+                    PeerConnection.IceServer.builder("stun:stun.l.google.com:19302")
+                            .createIceServer(),
+                    PeerConnection.IceServer.builder("stun:stun1.l.google.com:19302")
+                            .createIceServer(),
+                    PeerConnection.IceServer.builder("stun:stun2.l.google.com:19302")
+                            .createIceServer(),
+                    createIceServer(
+                            "turn:global.turn.nodely.network:80?transport=tcp",
+                            BuildConfig.NODELY_TURN_USERNAME,
+                            BuildConfig.NODELY_TURN_CREDENTIAL
+                    ),
+                    createIceServer(
+                            "turns:global.turn.nodely.network:443?transport=tcp",
+                            BuildConfig.NODELY_TURN_USERNAME,
+                            BuildConfig.NODELY_TURN_CREDENTIAL
+                    ),
+                    createIceServer(
+                            "turn:eu.turn.nodely.io:80?transport=tcp",
+                            BuildConfig.NODELY_TURN_USERNAME,
+                            BuildConfig.NODELY_TURN_CREDENTIAL
+                    ),
+                    createIceServer(
+                            "turns:eu.turn.nodely.io:443?transport=tcp",
+                            BuildConfig.NODELY_TURN_USERNAME,
+                            BuildConfig.NODELY_TURN_CREDENTIAL
+                    ),
+                    createIceServer(
+                            "turn:us.turn.nodely.io:80?transport=tcp",
+                            BuildConfig.NODELY_TURN_USERNAME,
+                            BuildConfig.NODELY_TURN_CREDENTIAL
+                    ),
+                    createIceServer(
+                            "turns:us.turn.nodely.io:443?transport=tcp",
+                            BuildConfig.NODELY_TURN_USERNAME,
+                            BuildConfig.NODELY_TURN_CREDENTIAL
+                    ),
+                    createIceServer(
+                            "turn:global.relay.metered.ca:80",
+                            BuildConfig.TURN_USERNAME,
+                            BuildConfig.TURN_CREDENTIAL
+                    ),
+                    createIceServer(
+                            "turn:global.relay.metered.ca:80?transport=tcp",
+                            BuildConfig.TURN_USERNAME,
+                            BuildConfig.TURN_CREDENTIAL
+                    ),
+                    createIceServer(
+                            "turn:global.relay.metered.ca:443",
+                            BuildConfig.TURN_USERNAME,
+                            BuildConfig.TURN_CREDENTIAL
+                    ),
+                    createIceServer(
+                            "turns:global.relay.metered.ca:443?transport=tcp",
+                            BuildConfig.TURN_USERNAME,
+                            BuildConfig.TURN_CREDENTIAL
+                    )
+            )
 
     private var mBounded = false
     private var signalService: SignalService? = null
@@ -105,9 +152,10 @@ class AnswerActivity : AppCompatActivity() {
 
     // Data Models
     private lateinit var db: CredentialDatabase
-    private val credentialRepository = CredentialRepository()        // Handle Credential Operations
-    private val viewModel: AnswerViewModel by viewModels()           // Handle View State
-    private val wallet: WalletViewModel by viewModels()              // Handle Wallet Operations
+    private val credentialRepository = CredentialRepository() // Handle Credential Operations
+    private val derivedSecretRepository = DerivedSecretRepository()
+    private val viewModel: AnswerViewModel by viewModels() // Handle View State
+    private val wallet: WalletViewModel by viewModels() // Handle Wallet Operations
     private val notifications: NotificationViewModel by viewModels() // Handle Notifications
 
     // Fragments/Bindings
@@ -115,20 +163,18 @@ class AnswerActivity : AppCompatActivity() {
     private lateinit var binding: ActivityAnswerBinding
 
     // Third Party APIs
-    private var httpClient = OkHttpClient.Builder()
-        .cookieJar(Cookies())
-        .build()
+    private var httpClient = OkHttpClient.Builder().cookieJar(Cookies()).build()
     private lateinit var scanner: GmsBarcodeScanner
     private lateinit var promptInfo: BiometricPrompt.PromptInfo
-
 
     // FIDO/Auth interfaces
     private var fido2Client: Fido2ApiClient? = null
     private var signalClient: SignalClient? = null
     private val attestationApi = AttestationApi(httpClient)
     private val assertionApi = AssertionApi(httpClient)
-    private val userAgent = "${BuildConfig.APPLICATION_ID}/${BuildConfig.VERSION_NAME} " +
-            "(Android ${Build.VERSION.RELEASE}; ${Build.MODEL}; ${Build.BRAND})"
+    private val userAgent =
+            "${BuildConfig.APPLICATION_ID}/${BuildConfig.VERSION_NAME} " +
+                    "(Android ${Build.VERSION.RELEASE}; ${Build.MODEL}; ${Build.BRAND})"
     private var signature: ByteArray? = null
 
     // Datachannel Provider/Handler
@@ -139,17 +185,18 @@ class AnswerActivity : AppCompatActivity() {
     private val provider = AVMProvider(providerId)
 
     // Register/Attestation Intent Launcher
-    private val attestationIntentLauncher = registerForActivityResult(
-        ActivityResultContracts.StartIntentSenderForResult(),
-        ::handleAuthenticatorAttestationResult
-    )
+    private val attestationIntentLauncher =
+            registerForActivityResult(
+                    ActivityResultContracts.StartIntentSenderForResult(),
+                    ::handleAuthenticatorAttestationResult
+            )
 
     // Authenticate/Assertion Intent Channel
-    private val assertionIntentLauncher = registerForActivityResult(
-        ActivityResultContracts.StartIntentSenderForResult(),
-        ::handleAuthenticatorAssertionResult
-    )
-
+    private val assertionIntentLauncher =
+            registerForActivityResult(
+                    ActivityResultContracts.StartIntentSenderForResult(),
+                    ::handleAuthenticatorAssertionResult
+            )
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -168,10 +215,15 @@ class AnswerActivity : AppCompatActivity() {
 
         // Create Fragments
         accountDialogFragment =
-            AccountDialogFragment(wallet.account.value!!, wallet.rekey.value!!, wallet.selected.value!!)
+                AccountDialogFragment(
+                        wallet.account.value!!,
+                        wallet.rekey.value!!,
+                        wallet.selected.value!!
+                )
 
         // Ensure the device has notifications enabled
-        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val notificationManager =
+                getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (!notificationManager.areNotificationsEnabled()) {
             val notificationsDialogFragment = NotificationsDialogFragment(packageName)
             if (!notificationsDialogFragment.isVisible) {
@@ -179,12 +231,20 @@ class AnswerActivity : AppCompatActivity() {
             }
         }
         // Ensure the device is secure to access FIDO/Passkeys
-        val keyguardManager = this@AnswerActivity.getSystemService(KEYGUARD_SERVICE) as KeyguardManager
+        val keyguardManager =
+                this@AnswerActivity.getSystemService(KEYGUARD_SERVICE) as KeyguardManager
         if (!keyguardManager.isDeviceSecure) {
             val settingsDialogFragment = SettingsDialogFragment()
             if (!settingsDialogFragment.isVisible) {
                 settingsDialogFragment.show(supportFragmentManager, "CREATED")
             }
+        }
+
+        val passKeysMnemonicFragment = PassKeysMnemonicDialogFragment()
+        if (!passKeysMnemonicFragment.isVisible &&
+                        derivedSecretRepository.getDerivedParentSecret(this@AnswerActivity) == null
+        ) {
+            passKeysMnemonicFragment.show(supportFragmentManager, "MNEMONIC_INPUT")
         }
 
         // Load the existing credentials
@@ -193,21 +253,26 @@ class AnswerActivity : AppCompatActivity() {
             val credentials = db.credentialDao().getAll()
             credentials.collect() { credentialList ->
                 Log.d(TAG, "db: $credentialList")
-                val credArray = credentialList.map {
-                    val user = it.userHandle
-                    val origin = it.origin
-                    "$user@$origin"
-                } as MutableList<String>
+                val credArray =
+                        credentialList.map {
+                            val user = it.userHandle
+                            val origin = it.origin
+                            "$user@$origin"
+                        } as
+                                MutableList<String>
                 if (credArray.isEmpty()) {
-                    credArray.add("No Credentials Found, scan a QR code to register a new credential.")
+                    credArray.add(
+                            "No Credentials Found, scan a QR code to register a new credential."
+                    )
                 }
                 val listView = findViewById<ListView>(R.id.listView)
-                val adapter: ArrayAdapter<*> = ArrayAdapter<String>(
-                    this@AnswerActivity,
-                    android.R.layout.simple_list_item_1,
-                    android.R.id.text1,
-                    credArray
-                )
+                val adapter: ArrayAdapter<*> =
+                        ArrayAdapter<String>(
+                                this@AnswerActivity,
+                                android.R.layout.simple_list_item_1,
+                                android.R.id.text1,
+                                credArray
+                        )
                 listView.adapter = adapter
             }
         }
@@ -215,24 +280,23 @@ class AnswerActivity : AppCompatActivity() {
         binding = ActivityAnswerBinding.inflate(layoutInflater)
         binding.lifecycleOwner = this
         binding.viewModel = viewModel
-        binding.connectButton.setOnClickListener {
-            connect()
+        binding.connectButton.setOnClickListener { connect() }
+        binding.showManualAddPassKeyDialogButton.setOnClickListener {
+            showManualAddPassKeysDialog()
         }
         setContentView(binding.root)
     }
 
     override fun onPostCreate(savedInstanceState: Bundle?) {
         super.onPostCreate(savedInstanceState)
-        initWebRTCService {
-            hydrateIntents()
-        }
+        initWebRTCService { hydrateIntents() }
     }
 
-    /**
-     * Reload the application state from an Intent
-     */
+    /** Reload the application state from an Intent */
     private fun hydrateIntents() {
-        val isConnected = signalService?.dataChannel is DataChannel && signalService?.dataChannel?.state() === DataChannel.State.OPEN
+        val isConnected =
+                signalService?.dataChannel is DataChannel &&
+                        signalService?.dataChannel?.state() === DataChannel.State.OPEN
         val isIntent = intent != null
         val isDeepLink = intent?.data != null && intent.data is Uri
         val isDataChannelMessage = intent?.getStringExtra("msg") != null
@@ -251,7 +315,6 @@ class AnswerActivity : AppCompatActivity() {
                             signalService!!.updateLastKnownReferer(appId)
                         }
                     }
-
                 }
             }
             // Find the Referrer in the Activity
@@ -264,16 +327,17 @@ class AnswerActivity : AppCompatActivity() {
             val msg = AuthMessage.fromUri(intentUri)
             viewModel.setMessage(msg)
             signalService?.start(
-                msg.origin,
-                httpClient,
-                notifications.createNotificationBuilder(this@AnswerActivity),
-                NotificationViewModel.SERVICE_NOTIFICATION_ID,
-                AnswerActivity::class.java
+                    msg.origin,
+                    httpClient,
+                    notifications.createNotificationBuilder(this@AnswerActivity),
+                    NotificationViewModel.SERVICE_NOTIFICATION_ID,
+                    AnswerActivity::class.java
             )
 
             // Launch the authentication process
             lifecycleScope.launch {
-                val savedCredential = credentialRepository.getCredentialByOrigin(this@AnswerActivity, msg.origin)
+                val savedCredential =
+                        credentialRepository.getCredentialByOrigin(this@AnswerActivity, msg.origin)
                 if (savedCredential === null) {
                     register(msg)
                 } else {
@@ -283,7 +347,7 @@ class AnswerActivity : AppCompatActivity() {
         }
 
         // Handle a datachannel message
-        if(isDataChannelMessage) {
+        if (isDataChannelMessage) {
             val msg = intent.getStringExtra("msg")
             if (msg !== null) {
                 handleMessages(msg)
@@ -301,88 +365,92 @@ class AnswerActivity : AppCompatActivity() {
         if (mBounded) {
             return
         }
-        notifications.createChannels(getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+        notifications.createChannels(
+                getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        )
         // Handle the Service Connection
-        mConnection = object : ServiceConnection {
-            override fun onServiceDisconnected(name: ComponentName) {
-                mBounded = false
-                signalService = null
-            }
+        mConnection =
+                object : ServiceConnection {
+                    override fun onServiceDisconnected(name: ComponentName) {
+                        mBounded = false
+                        signalService = null
+                    }
 
-            override fun onServiceConnected(name: ComponentName, service: IBinder) {
-                mBounded = true
-                val mLocalBinder = service as SignalService.LocalBinder
-                signalService = mLocalBinder.getServerInstance()
-                onServiceConnection()
-            }
-        }
+                    override fun onServiceConnected(name: ComponentName, service: IBinder) {
+                        mBounded = true
+                        val mLocalBinder = service as SignalService.LocalBinder
+                        signalService = mLocalBinder.getServerInstance()
+                        onServiceConnection()
+                    }
+                }
         val startIntent = Intent(this, SignalService::class.java)
         startService(startIntent)
         bindService(startIntent, mConnection as ServiceConnection, Context.BIND_AUTO_CREATE)
     }
 
     /**
-     * Load seed phrases from SharedPreferences
-     * This is not recommended in production applications, it is just for demonstration purposes.
+     * Load seed phrases from SharedPreferences This is not recommended in production applications,
+     * it is just for demonstration purposes.
      */
     private fun hydrateSharedPreferences() {
         val sharedPref = getSharedPreferences(SHARED_PREFERENCE_SEED_FILE, Context.MODE_PRIVATE)
         // Load the stored seed phrases
-        sharedPref.getString("MAIN_ACCOUNT", null)?.let {
-            wallet.setAccount(Account(it))
-        } ?: run {
-            val account = Account()
-            sharedPref.edit().putString("MAIN_ACCOUNT", account.toMnemonic()).apply()
-            wallet.setAccount(account)
-        }
-        sharedPref.getString("REKEY_ACCOUNT", null)?.let {
-            wallet.setRekey(Account(it))
-        } ?: run {
-            val account = Account()
-            sharedPref.edit().putString("REKEY_ACCOUNT", account.toMnemonic()).apply()
-            wallet.setRekey(account)
-        }
+        sharedPref.getString("MAIN_ACCOUNT", null)?.let { wallet.setAccount(Account(it)) }
+                ?: run {
+                    val account = Account()
+                    sharedPref.edit().putString("MAIN_ACCOUNT", account.toMnemonic()).apply()
+                    wallet.setAccount(account)
+                }
+        sharedPref.getString("REKEY_ACCOUNT", null)?.let { wallet.setRekey(Account(it)) }
+                ?: run {
+                    val account = Account()
+                    sharedPref.edit().putString("REKEY_ACCOUNT", account.toMnemonic()).apply()
+                    wallet.setRekey(account)
+                }
         sharedPref.getString("SELECTED_ACCOUNT", null)?.let {
             if (wallet.rekey.value!!.address.toString() == it) {
                 wallet.setSelected(wallet.rekey.value!!)
             } else {
                 wallet.setSelected(wallet.account.value!!)
             }
-        } ?: run {
-            sharedPref.edit().putString("SELECTED_ACCOUNT", wallet.account.value!!.address.toString()).apply()
-            wallet.setSelected(wallet.account.value!!)
         }
+                ?: run {
+                    sharedPref
+                            .edit()
+                            .putString(
+                                    "SELECTED_ACCOUNT",
+                                    wallet.account.value!!.address.toString()
+                            )
+                            .apply()
+                    wallet.setSelected(wallet.account.value!!)
+                }
     }
 
-    /**
-     * Show the Account Settings Fragment
-     */
+    /** Show the Account Settings Fragment */
     private fun toggleAccountDialogFragment() {
         val fragmentManager = supportFragmentManager
         val transaction = fragmentManager.beginTransaction()
         transaction.setTransition(FragmentTransaction.TRANSIT_FRAGMENT_OPEN)
-        transaction
-            .add(android.R.id.content, accountDialogFragment)
-            .addToBackStack(null)
-            .commit()
+        transaction.add(android.R.id.content, accountDialogFragment).addToBackStack(null).commit()
     }
 
-    /**
-     * Switch the Activity type
-     */
+    /** Switch the Activity type */
     private fun handleSwitchActivity() {
         val switchIntent = Intent(this, OfferActivity::class.java)
         switchIntent.setFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
         startActivity(switchIntent)
     }
 
-    /**
-     * Algorand Specific Rekey
-     */
+    /** Algorand Specific Rekey */
     private fun handleRekey() {
         val result = wallet.algod.AccountInformation(wallet.account.value!!.address).execute()
         if (!result.isSuccessful) {
-            Toast.makeText(this@AnswerActivity, "Error getting account information", Toast.LENGTH_LONG).show()
+            Toast.makeText(
+                            this@AnswerActivity,
+                            "Error getting account information",
+                            Toast.LENGTH_LONG
+                    )
+                    .show()
             return
         }
         val accountInfo = result.body()
@@ -393,39 +461,47 @@ class AnswerActivity : AppCompatActivity() {
         // Rekey Main Account to the Rekey Account
         if (wallet.account.value!!.address === wallet.selected.value!!.address) {
             wallet.rekey(wallet.account.value!!, wallet.rekey.value!!)
-            Toast.makeText(this@AnswerActivity, "Rekeyed to ${wallet.rekey.value!!.address}", Toast.LENGTH_LONG).show()
+            Toast.makeText(
+                            this@AnswerActivity,
+                            "Rekeyed to ${wallet.rekey.value!!.address}",
+                            Toast.LENGTH_LONG
+                    )
+                    .show()
             // Rekey back to the Main Account from the Rekey Account
         } else {
             wallet.rekey(wallet.account.value!!, wallet.account.value!!, wallet.rekey.value!!)
             Toast.makeText(this@AnswerActivity, "Removed Rekey", Toast.LENGTH_LONG).show()
         }
-        getSharedPreferences(SHARED_PREFERENCE_SEED_FILE, Context.MODE_PRIVATE).edit().putString("SELECTED_ACCOUNT", wallet.selected.value!!.address.toString()).apply()
+        getSharedPreferences(SHARED_PREFERENCE_SEED_FILE, Context.MODE_PRIVATE)
+                .edit()
+                .putString("SELECTED_ACCOUNT", wallet.selected.value!!.address.toString())
+                .apply()
     }
 
-    /**
-     * Navigate to the Algorand Dispenser
-     */
+    /** Navigate to the Algorand Dispenser */
     private fun handleOpenDispenser() {
         val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        clipboard.setPrimaryClip(ClipData.newPlainText("Address", wallet.account.value!!.address.toString()))
-        val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://bank.testnet.algorand.network"))
-        startActivity(browserIntent)
-    }
-
-    /**
-     * Navigate to the Account Explorer
-     */
-    private fun handleAccountExplorer() {
-        val browserIntent = Intent(
-            Intent.ACTION_VIEW,
-            Uri.parse("https://testnet.explorer.perawallet.app/address/${wallet.account.value!!.address}")
+        clipboard.setPrimaryClip(
+                ClipData.newPlainText("Address", wallet.account.value!!.address.toString())
         )
+        val browserIntent =
+                Intent(Intent.ACTION_VIEW, Uri.parse("https://bank.testnet.algorand.network"))
         startActivity(browserIntent)
     }
 
-    /**
-     * Handle Menu Options
-     */
+    /** Navigate to the Account Explorer */
+    private fun handleAccountExplorer() {
+        val browserIntent =
+                Intent(
+                        Intent.ACTION_VIEW,
+                        Uri.parse(
+                                "https://testnet.explorer.perawallet.app/address/${wallet.account.value!!.address}"
+                        )
+                )
+        startActivity(browserIntent)
+    }
+
+    /** Handle Menu Options */
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         // Handle item selection.
         return when (item.itemId) {
@@ -433,64 +509,60 @@ class AnswerActivity : AppCompatActivity() {
                 handleSwitchActivity()
                 true
             }
-
             R.id.rekeyButton -> {
                 handleRekey()
                 true
             }
-
             R.id.accountButton -> {
                 toggleAccountDialogFragment()
                 true
             }
-
             R.id.accountExplorerButton -> {
                 handleAccountExplorer()
                 true
             }
-
             R.id.dispenserButton -> {
                 handleOpenDispenser()
                 true
             }
-
             else -> super.onOptionsItemSelected(item)
         }
     }
 
-    /**
-     * Transaction Biometric Prompt
-     */
-    private suspend fun biometrics(message: SignTransactionsParams): BiometricPrompt.AuthenticationResult? {
+    /** Transaction Biometric Prompt */
+    private suspend fun biometrics(
+            message: SignTransactionsParams
+    ): BiometricPrompt.AuthenticationResult? {
         return suspendCoroutine { continuation ->
-            var biometricPrompt = BiometricPrompt(this@AnswerActivity, ContextCompat.getMainExecutor(this@AnswerActivity),
-                object : BiometricPrompt.AuthenticationCallback() {
-                    override fun onAuthenticationSucceeded(
-                        result: BiometricPrompt.AuthenticationResult
-                    ) {
-                        super.onAuthenticationSucceeded(result)
-                        continuation.resume(result)
-                    }
+            var biometricPrompt =
+                    BiometricPrompt(
+                            this@AnswerActivity,
+                            ContextCompat.getMainExecutor(this@AnswerActivity),
+                            object : BiometricPrompt.AuthenticationCallback() {
+                                override fun onAuthenticationSucceeded(
+                                        result: BiometricPrompt.AuthenticationResult
+                                ) {
+                                    super.onAuthenticationSucceeded(result)
+                                    continuation.resume(result)
+                                }
 
-                    override fun onAuthenticationFailed() {
-                        super.onAuthenticationFailed()
-                        continuation.resume(null)
-                    }
-                })
-            promptInfo = BiometricPrompt.PromptInfo.Builder()
-                .setTitle("Transaction(s) ${message.txns.size}")
-                .setSubtitle(
-                    "Provider: ${message.providerId}"
-                )
-                .setNegativeButtonText("Cancel")
-                .build()
+                                override fun onAuthenticationFailed() {
+                                    super.onAuthenticationFailed()
+                                    continuation.resume(null)
+                                }
+                            }
+                    )
+            promptInfo =
+                    BiometricPrompt.PromptInfo.Builder()
+                            .setTitle("Transaction(s) ${message.txns.size}")
+                            .setSubtitle("Provider: ${message.providerId}")
+                            .setNegativeButtonText("Cancel")
+                            .build()
             biometricPrompt.authenticate(promptInfo)
         }
     }
 
-    /**
-     * Decode Unsigned Transaction
-     */
+    /** Decode Unsigned Transaction */
     @OptIn(ExperimentalEncodingApi::class)
     private fun decodeUnsignedTransaction(unsignedTxn: String): Transaction? {
         return Encoder.decodeFromMsgPack(Base64.decode(unsignedTxn), Transaction::class.java)
@@ -507,17 +579,23 @@ class AnswerActivity : AppCompatActivity() {
         try {
             val message = Message(Base64.UrlSafe.decode(msgStr), EncoderType.CBOR)
             val request = provider.encoder.decode<RequestMessage>(message.data, message.encoding)
-            if (request.reference == "arc0027:sign_transactions:request"){
+            if (request.reference == "arc0027:sign_transactions:request") {
                 lifecycleScope.launch {
-                    val params = provider.encoder.decode<SignTransactionsParams>(
-                        provider.encoder.encode(request.params, EncoderType.NONE), EncoderType.NONE
-                    )
+                    val params =
+                            provider.encoder.decode<SignTransactionsParams>(
+                                    provider.encoder.encode(request.params, EncoderType.NONE),
+                                    EncoderType.NONE
+                            )
                     biometrics(params)
                     provider.setKeyPair(keyPair)
                     val resultMessage = provider.handleMessage(message) as ResponseMessage
                     when (resultMessage.result) {
                         is SignTransactionsResult -> {
-                            signalService!!.send(Base64.UrlSafe.encode(resultMessage.toByteArray(EncoderType.CBOR)))
+                            signalService!!.send(
+                                    Base64.UrlSafe.encode(
+                                            resultMessage.toByteArray(EncoderType.CBOR)
+                                    )
+                            )
                         }
                         else -> {
                             TODO("Not Implemented")
@@ -525,7 +603,6 @@ class AnswerActivity : AppCompatActivity() {
                     }
                 }
             }
-
         } catch (e: Throwable) {
             Log.e(TAG, "Error: $e")
             runOnUiThread {
@@ -537,63 +614,74 @@ class AnswerActivity : AppCompatActivity() {
     /**
      * Connect/Proof of Knowledge API
      *
-     * Connects the Wallet/Android Application to a dApp/website using a Barcode.
-     * The barcode must use the liquid uri scheme and contain a request id.
+     * Connects the Wallet/Android Application to a dApp/website using a Barcode. The barcode must
+     * use the liquid uri scheme and contain a request id.
      *
      * liquid://<ORIGIN>/?requestId=<REQUEST_ID>
      *
-     * In Android 14, the application can handle the FIDO:/ URI scheme directly.
-     * This is useful when a user is registering the phone as an Authenticator for the first time.
+     * In Android 14, the application can handle the FIDO:/ URI scheme directly. This is useful when
+     * a user is registering the phone as an Authenticator for the first time.
      */
     private fun connect() {
-        GmsBarcodeScanning.getClient(this@AnswerActivity).startScan()
-            .addOnSuccessListener { barcode ->
-                // Handle any scanned FIDO URI directly
-                if (barcode.displayValue!!.startsWith("FIDO:/")) {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(barcode.displayValue)))
-                    } else {
-                        Toast.makeText(this@AnswerActivity, "Android 14 Required", Toast.LENGTH_LONG).show()
-                    }
-                    // Handle Liquid Auth URI
-                } else {
-                    // Decode Barcode Message
-                    val msg = AuthMessage.fromBarcode(barcode)
-                    viewModel.setMessage(msg)
-                    signalService!!.updateDeepLinkFlag(false)
-                    signalService?.start(
-                        msg.origin,
-                        httpClient,
-                        notifications.createNotificationBuilder(this@AnswerActivity),
-                        NotificationViewModel.SERVICE_NOTIFICATION_ID,
-                        AnswerActivity::class.java,
-                    )
-                    // Connect to Service
-                    lifecycleScope.launch {
-                        val savedCredential =
-                            credentialRepository.getCredentialByOrigin(this@AnswerActivity, msg.origin)
-                        signalClient = SignalClient(msg.origin, this@AnswerActivity, httpClient)
-                        if (savedCredential === null) {
-                            register(msg)
+        GmsBarcodeScanning.getClient(this@AnswerActivity)
+                .startScan()
+                .addOnSuccessListener { barcode ->
+                    // Handle any scanned FIDO URI directly
+                    if (barcode.displayValue!!.startsWith("FIDO:/")) {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                            startActivity(
+                                    Intent(Intent.ACTION_VIEW, Uri.parse(barcode.displayValue))
+                            )
                         } else {
-                            authenticate(msg, savedCredential)
+                            Toast.makeText(
+                                            this@AnswerActivity,
+                                            "Android 14 Required",
+                                            Toast.LENGTH_LONG
+                                    )
+                                    .show()
+                        }
+                        // Handle Liquid Auth URI
+                    } else {
+                        // Decode Barcode Message
+                        val msg = AuthMessage.fromBarcode(barcode)
+                        viewModel.setMessage(msg)
+                        signalService!!.updateDeepLinkFlag(false)
+                        signalService?.start(
+                                msg.origin,
+                                httpClient,
+                                notifications.createNotificationBuilder(this@AnswerActivity),
+                                NotificationViewModel.SERVICE_NOTIFICATION_ID,
+                                AnswerActivity::class.java,
+                        )
+                        // Connect to Service
+                        lifecycleScope.launch {
+                            val savedCredential =
+                                    credentialRepository.getCredentialByOrigin(
+                                            this@AnswerActivity,
+                                            msg.origin
+                                    )
+                            signalClient = SignalClient(msg.origin, this@AnswerActivity, httpClient)
+                            if (savedCredential === null) {
+                                register(msg)
+                            } else {
+                                authenticate(msg, savedCredential)
+                            }
                         }
                     }
                 }
-            }
-            .addOnCanceledListener {
-                Toast.makeText(this@AnswerActivity, "Canceled", Toast.LENGTH_LONG).show()
-            }
-            .addOnFailureListener { e ->
-                Toast.makeText(this@AnswerActivity, e.message, Toast.LENGTH_LONG).show()
-            }
+                .addOnCanceledListener {
+                    Toast.makeText(this@AnswerActivity, "Canceled", Toast.LENGTH_LONG).show()
+                }
+                .addOnFailureListener { e ->
+                    Toast.makeText(this@AnswerActivity, e.message, Toast.LENGTH_LONG).show()
+                }
     }
 
     /**
      * Registration of a new Credential (Step 1 of 2)
      *
-     * Receives PublicKeyCredentialCreationOptions from the FIDO2 Server and launches
-     * the authenticator Intent using the handleAuthenticatorAttestationResult Handler
+     * Receives PublicKeyCredentialCreationOptions from the FIDO2 Server and launches the
+     * authenticator Intent using the handleAuthenticatorAttestationResult Handler
      */
     private suspend fun register(msg: AuthMessage, options: JSONObject = JSONObject()) {
         val account = wallet.account.value!!
@@ -611,29 +699,26 @@ class AnswerActivity : AppCompatActivity() {
         // FIDO2 Server API Response for PublicKeyCredentialCreationOptions
         val response = attestationApi.postAttestationOptions(msg.origin, userAgent, options).await()
         val session = Cookie.fromResponse(response)
-        session?.let {
-            setSession(Cookie.getID(it))
-        }
+        session?.let { setSession(Cookie.getID(it)) }
         // Convert ResponseBody to FIDO2 PublicKeyCredentialCreationOptions
         val pubKeyCredentialCreationOptions = response.body!!.toPublicKeyCredentialCreationOptions()
         // Sign the challenge with the algorand account, this is used in the liquid FIDO2 extension
-        signature = KeyPairs.rawSignBytes(
-            pubKeyCredentialCreationOptions.challenge,
-            KeyPairs.getKeyPair(selected.toMnemonic()).private
-        )
+        signature =
+                KeyPairs.rawSignBytes(
+                        pubKeyCredentialCreationOptions.challenge,
+                        KeyPairs.getKeyPair(selected.toMnemonic()).private
+                )
         // Kick off FIDO2 Client Intent
-        val pendingIntent = fido2Client!!.getRegisterPendingIntent(pubKeyCredentialCreationOptions).await()
-        attestationIntentLauncher.launch(
-            IntentSenderRequest.Builder(pendingIntent)
-                .build()
-        )
+        val pendingIntent =
+                fido2Client!!.getRegisterPendingIntent(pubKeyCredentialCreationOptions).await()
+        attestationIntentLauncher.launch(IntentSenderRequest.Builder(pendingIntent).build())
     }
 
     /**
      * Registration of a New Credential (Step 2 of 2)
      *
-     * Handles the ActivityResult from a FIDO2 Intent and submits
-     * the Authenticator's PublicKeyCredential to the FIDO2 Server
+     * Handles the ActivityResult from a FIDO2 Intent and submits the Authenticator's
+     * PublicKeyCredential to the FIDO2 Server
      */
     @OptIn(ExperimentalEncodingApi::class)
     private fun handleAuthenticatorAttestationResult(activityResult: ActivityResult) {
@@ -641,25 +726,32 @@ class AnswerActivity : AppCompatActivity() {
 
         when {
             activityResult.resultCode != Activity.RESULT_OK ->
-                Toast.makeText(this@AnswerActivity, "Canceled", Toast.LENGTH_LONG).show()
-
-            bytes == null ->
-                Toast.makeText(this@AnswerActivity, "Error", Toast.LENGTH_LONG)
-                    .show()
-
+                    Toast.makeText(this@AnswerActivity, "Canceled", Toast.LENGTH_LONG).show()
+            bytes == null -> Toast.makeText(this@AnswerActivity, "Error", Toast.LENGTH_LONG).show()
             else -> {
                 // Handle PublicKeyCredential Response from Authenticator
                 val credential = PublicKeyCredential.deserializeFromBytes(bytes)
                 val response = credential.response
                 if (response is AuthenticatorErrorResponse) {
                     if (response.errorCode === ErrorCode.UNKNOWN_ERR) {
-                        Toast.makeText(this@AnswerActivity, "Something Went Wrong", Toast.LENGTH_LONG).show()
+                        Toast.makeText(
+                                        this@AnswerActivity,
+                                        "Something Went Wrong",
+                                        Toast.LENGTH_LONG
+                                )
+                                .show()
                     } else {
-                        Toast.makeText(this@AnswerActivity, response.errorMessage, Toast.LENGTH_LONG).show()
+                        Toast.makeText(
+                                        this@AnswerActivity,
+                                        response.errorMessage,
+                                        Toast.LENGTH_LONG
+                                )
+                                .show()
                     }
                 } else {
                     if (signature === null) {
-                        Toast.makeText(this@AnswerActivity, "Signature is null", Toast.LENGTH_LONG).show()
+                        Toast.makeText(this@AnswerActivity, "Signature is null", Toast.LENGTH_LONG)
+                                .show()
                         return
                     }
                     val msg = viewModel.message.value!!
@@ -674,44 +766,59 @@ class AnswerActivity : AppCompatActivity() {
 
                     lifecycleScope.launch {
                         // POST Authenticator Results to FIDO2 API
-                        attestationApi.postAttestationResult(
-                            msg.origin,
-                            userAgent,
-                            credential,
-                            liquidExtJSON
-                        ).await()
-                        viewModel.saveCredential(this@AnswerActivity, wallet.account.value!!, credential)
+                        attestationApi
+                                .postAttestationResult(
+                                        msg.origin,
+                                        userAgent,
+                                        credential,
+                                        liquidExtJSON
+                                )
+                                .await()
+                        viewModel.saveCredential(
+                                this@AnswerActivity,
+                                wallet.account.value!!,
+                                credential
+                        )
                         Log.d(TAG, "Credential Saved")
                         if (mBounded) {
                             Log.d(TAG, "Service Bonded")
                             signalService?.peer(msg.requestId, "answer", iceServers)
                             runOnUiThread {
-                                if(signalService!!.isDeepLink) this@AnswerActivity.onBackPressed()
+                                if (signalService!!.isDeepLink) this@AnswerActivity.onBackPressed()
                             }
-                            signalService?.handleMessages(this@AnswerActivity, { peerMsg ->
-                                Log.d(TAG, "handleMessages($peerMsg)")
-                                handleMessages(peerMsg)
-                            },{
-                                Log.d(TAG, "onStateChange($it)")
-                                if (it === "OPEN") {
-                                    Log.d(TAG, "Sending Credential")
-                                    signalService?.send(
-                                        viewModel.getCredentialMessage(
-                                            wallet.account.value!!,
-                                            credential
-                                        ).toString()
-                                    )
-                                }
-                            },
-                                notifications.createNotificationBuilder(this@AnswerActivity),
-                                NotificationViewModel.SERVICE_NOTIFICATION_ID,
-                                AnswerActivity::class.java
+                            signalService?.handleMessages(
+                                    this@AnswerActivity,
+                                    { peerMsg ->
+                                        Log.d(TAG, "handleMessages($peerMsg)")
+                                        handleMessages(peerMsg)
+                                    },
+                                    {
+                                        Log.d(TAG, "onStateChange($it)")
+                                        if (it === "OPEN") {
+                                            Log.d(TAG, "Sending Credential")
+                                            signalService?.send(
+                                                    viewModel
+                                                            .getCredentialMessage(
+                                                                    wallet.account.value!!,
+                                                                    credential
+                                                            )
+                                                            .toString()
+                                            )
+                                        }
+                                    },
+                                    notifications.createNotificationBuilder(this@AnswerActivity),
+                                    NotificationViewModel.SERVICE_NOTIFICATION_ID,
+                                    AnswerActivity::class.java
                             )
                         } else {
-                            Toast.makeText(this@AnswerActivity, "Couldn't find service", Toast.LENGTH_LONG).show()
+                            Toast.makeText(
+                                            this@AnswerActivity,
+                                            "Couldn't find service",
+                                            Toast.LENGTH_LONG
+                                    )
+                                    .show()
                         }
                     }
-
                 }
             }
         }
@@ -720,57 +827,62 @@ class AnswerActivity : AppCompatActivity() {
     /**
      * Authentication using a PublicKeyCredential (Step 1 of 2)
      *
-     * Receives PublicKeyCredentialRequestOptions from the FIDO2 Server and launches
-     * the authenticator Intent using the handleAuthenticatorAssertionResult Handler
+     * Receives PublicKeyCredentialRequestOptions from the FIDO2 Server and launches the
+     * authenticator Intent using the handleAuthenticatorAssertionResult Handler
      */
     private suspend fun authenticate(msg: AuthMessage, credential: Credential) {
-        val response = assertionApi.postAssertionOptions(
-            msg.origin,
-            userAgent,
-            credential.credentialId
-        ).await()
+        val response =
+                assertionApi
+                        .postAssertionOptions(msg.origin, userAgent, credential.credentialId)
+                        .await()
         val session = Cookie.fromResponse(response)
-        session?.let {
-            setSession(Cookie.getID(it))
-        }
-        val publicKeyCredentialRequestOptions = response.body!!.toPublicKeyCredentialRequestOptions()
-        val pendingIntent = fido2Client!!.getSignPendingIntent(publicKeyCredentialRequestOptions).await()
+        session?.let { setSession(Cookie.getID(it)) }
+        val publicKeyCredentialRequestOptions =
+                response.body!!.toPublicKeyCredentialRequestOptions()
+        val pendingIntent =
+                fido2Client!!.getSignPendingIntent(publicKeyCredentialRequestOptions).await()
         assertionIntentLauncher.launch(IntentSenderRequest.Builder(pendingIntent).build())
     }
 
     /**
      * Authentication using a PublicKeyCredential (Step 2 of 2)
      *
-     * Handles the ActivityResult from a FIDO2 Intent and submits
-     * the Authenticator's PublicKeyCredential to the FIDO2 Server
+     * Handles the ActivityResult from a FIDO2 Intent and submits the Authenticator's
+     * PublicKeyCredential to the FIDO2 Server
      */
     private fun handleAuthenticatorAssertionResult(activityResult: ActivityResult) {
         val bytes = activityResult.data?.getByteArrayExtra(Fido.FIDO2_KEY_CREDENTIAL_EXTRA)
         when {
             activityResult.resultCode != Activity.RESULT_OK ->
-                Toast.makeText(this@AnswerActivity, "Canceled", Toast.LENGTH_LONG).show()
-
+                    Toast.makeText(this@AnswerActivity, "Canceled", Toast.LENGTH_LONG).show()
             bytes == null ->
-                Toast.makeText(this@AnswerActivity, "Authenticate Error", Toast.LENGTH_LONG).show()
-
+                    Toast.makeText(this@AnswerActivity, "Authenticate Error", Toast.LENGTH_LONG)
+                            .show()
             else -> {
                 // Handle PublicKeyCredential Response from Authenticator
                 val credential = PublicKeyCredential.deserializeFromBytes(bytes)
                 val pubKeyCredentialResponse = credential.response
                 if (pubKeyCredentialResponse is AuthenticatorErrorResponse) {
-                    Toast.makeText(this@AnswerActivity, pubKeyCredentialResponse.errorMessage, Toast.LENGTH_LONG)
-                        .show()
+                    Toast.makeText(
+                                    this@AnswerActivity,
+                                    pubKeyCredentialResponse.errorMessage,
+                                    Toast.LENGTH_LONG
+                            )
+                            .show()
                 } else {
                     lifecycleScope.launch {
                         val liquidExtJSON = JSONObject()
                         liquidExtJSON.put("requestId", viewModel.message.value!!.requestId)
                         // POST Authenticator Results to FIDO2 API
-                        val response = assertionApi.postAssertionResult(
-                            viewModel.message.value!!.origin,
-                            userAgent,
-                            credential,
-                            liquidExtJSON
-                        ).await()
+                        val response =
+                                assertionApi
+                                        .postAssertionResult(
+                                                viewModel.message.value!!.origin,
+                                                userAgent,
+                                                credential,
+                                                liquidExtJSON
+                                        )
+                                        .await()
 
                         // Update Render/State
                         val data = response.body!!.string()
@@ -791,38 +903,46 @@ class AnswerActivity : AppCompatActivity() {
                         if (mBounded) {
                             signalService?.peer(msg.requestId, "answer", iceServers)
                             runOnUiThread {
-                                if(signalService!!.isDeepLink) this@AnswerActivity.onBackPressed()
+                                if (signalService!!.isDeepLink) this@AnswerActivity.onBackPressed()
                             }
-                            signalService?.handleMessages(this@AnswerActivity, { peerMsg ->
-                                Log.d(TAG, "handleMessages($peerMsg)")
-                                handleMessages(peerMsg)
-                            },{
-                                Log.d(TAG, "onStateChange($it)")
-                                if (it === "OPEN") {
-                                    Log.d(TAG, "Sending Credential")
-                                    signalService?.send(
-                                        viewModel.getCredentialMessage(
-                                            wallet.account.value!!,
-                                            credential
-                                        ).toString()
-                                    )
-                                }
-                            },
-                                notifications.createNotificationBuilder(this@AnswerActivity),
-                                NotificationViewModel.SERVICE_NOTIFICATION_ID,
-                                AnswerActivity::class.java
+                            signalService?.handleMessages(
+                                    this@AnswerActivity,
+                                    { peerMsg ->
+                                        Log.d(TAG, "handleMessages($peerMsg)")
+                                        handleMessages(peerMsg)
+                                    },
+                                    {
+                                        Log.d(TAG, "onStateChange($it)")
+                                        if (it === "OPEN") {
+                                            Log.d(TAG, "Sending Credential")
+                                            signalService?.send(
+                                                    viewModel
+                                                            .getCredentialMessage(
+                                                                    wallet.account.value!!,
+                                                                    credential
+                                                            )
+                                                            .toString()
+                                            )
+                                        }
+                                    },
+                                    notifications.createNotificationBuilder(this@AnswerActivity),
+                                    NotificationViewModel.SERVICE_NOTIFICATION_ID,
+                                    AnswerActivity::class.java
                             )
                         } else {
-                            Toast.makeText(this@AnswerActivity, "Couldn't find service", Toast.LENGTH_LONG).show()
+                            Toast.makeText(
+                                            this@AnswerActivity,
+                                            "Couldn't find service",
+                                            Toast.LENGTH_LONG
+                                    )
+                                    .show()
                         }
                     }
                 }
             }
         }
     }
-    /**
-     * Update Render for demonstration purposes only
-     */
+    /** Update Render for demonstration purposes only */
     private fun setSession(s: String?) {
         if (s === null) {
             viewModel.setSession("Logged Out")
@@ -830,5 +950,11 @@ class AnswerActivity : AppCompatActivity() {
         } else {
             viewModel.setSession(s)
         }
+    }
+
+    /** Show the Manual Add PassKeys Dialog */
+    private fun showManualAddPassKeysDialog() {
+        val dialogFragment = ManualAddPassKeysDialogFragment()
+        dialogFragment.show(supportFragmentManager, ManualAddPassKeysDialogFragment.TAG)
     }
 }

@@ -8,29 +8,38 @@ import androidx.annotation.RequiresApi
 import androidx.credentials.provider.CallingAppInfo
 import foundation.algorand.demo.credential.db.Credential
 import foundation.algorand.demo.credential.db.CredentialDatabase
+import foundation.algorand.demo.derivedSecret.DerivedSecretRepository
+import foundation.algorand.deterministicP256.DeterministicP256
 import java.security.*
 import java.security.spec.*
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 
+// import java.security.interfaces.ECPrivateKey
 
 interface CredentialRepository {
     val keyStore: KeyStore
     var db: CredentialDatabase
     suspend fun saveCredential(context: Context, credential: Credential)
     fun getDatabase(context: Context): CredentialDatabase
-    fun generateCredentialId(): ByteArray
-    fun getKeyPair(context: Context): KeyPair
-    fun getKeyPair(context: Context, credentialId: ByteArray): KeyPair
+    fun generateCredentialId(keyPair: KeyPair): ByteArray
+    fun getKeyPair(context: Context, credentialId: ByteArray): KeyPair?
+    fun createDeterministicKeyPair(context: Context, origin: String, userHandle: String): KeyPair
     fun appInfoToOrigin(info: CallingAppInfo): String
     fun getCredential(context: Context, credentialId: ByteArray): Credential?
     fun getCredentialByOrigin(context: Context, origin: String): Credential?
+    fun sign(keyPair: KeyPair, payload: ByteArray): ByteArray
 }
+
 fun CredentialRepository(): CredentialRepository = Repository()
-class Repository(): CredentialRepository {
+
+class Repository() : CredentialRepository {
     override var keyStore: KeyStore = KeyStore.getInstance("AndroidKeyStore")
-    private var generator: KeyPairGenerator = KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_EC)
+    private var generator: KeyPairGenerator =
+            KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_EC)
+    private var dP256: DeterministicP256 = DeterministicP256()
     override lateinit var db: CredentialDatabase
+    private val derivedSecretRepository = DerivedSecretRepository()
     init {
         keyStore.load(null)
     }
@@ -42,17 +51,27 @@ class Repository(): CredentialRepository {
         getDatabase(context)
         db.credentialDao().insertAll(credential)
     }
+
     override fun getDatabase(context: Context): CredentialDatabase {
         Log.d(TAG, "getDatabase($context)")
-        if(!::db.isInitialized) {
+        if (!::db.isInitialized) {
             db = CredentialDatabase.getInstance(context)
         }
         return db
     }
-    override fun generateCredentialId(): ByteArray {
+
+    // CredentialId is deterministically generated from the public key
+    // Taking SHA-256 hash of the public key, giving us a 32-byte credentialId
+    override fun generateCredentialId(keyPair: KeyPair): ByteArray {
         Log.d(TAG, "generateCredentialId()")
-        val credentialId = ByteArray(32)
-        SecureRandom().nextBytes(credentialId)
+
+        // Get the public key bytes
+        val publicKeyBytes = keyPair.public.encoded
+
+        // Compute SHA-256 hash of the public key
+        val messageDigest = MessageDigest.getInstance("SHA-256")
+        val credentialId = messageDigest.digest(publicKeyBytes)
+
         return credentialId
     }
 
@@ -81,18 +100,28 @@ class Repository(): CredentialRepository {
         }
         return null
     }
-    override fun getKeyPair(context: Context): KeyPair{
-        return getKeyPair(context, generateCredentialId())
-    }
-    override fun getKeyPair(context:Context, credentialId: ByteArray): KeyPair {
+
+    override fun getKeyPair(context: Context, credentialId: ByteArray): KeyPair? {
         Log.d(TAG, "getKeyPair($context, $credentialId)")
-        val savedKeyPair = getKeyPairFromDatabase(context, credentialId)
-        if (savedKeyPair != null) {
-            return savedKeyPair
-        }
-        generator.initialize(ECGenParameterSpec("secp256r1"))
-        return generator.generateKeyPair()
+        return getKeyPairFromDatabase(context, credentialId)
     }
+
+    override fun createDeterministicKeyPair(
+            context: Context,
+            origin: String,
+            userHandle: String
+    ): KeyPair {
+        // Note that we take the LOWERCASE of the userHandle, to prevent confusion
+        Log.d(TAG, "createDeterministicKeyPair($context, , $origin, ${userHandle.lowercase()})")
+
+        val derivedParentSecret = derivedSecretRepository.getDerivedParentSecret(context)?.derivedSecret!!.toByteArray()
+        return dP256.genDomainSpecificKeypair(derivedParentSecret, origin, userHandle.lowercase())
+    }
+
+    override fun sign(keyPair: KeyPair, payload: ByteArray): ByteArray {
+        return dP256.signWithDomainSpecificKeyPair(keyPair, payload)
+    }
+
     @OptIn(ExperimentalEncodingApi::class)
     @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     override fun appInfoToOrigin(info: CallingAppInfo): String {
