@@ -1,3 +1,10 @@
+# [1.0.0-canary.6](https://github.com/algorandfoundation/liquid-auth-android/compare/v1.0.0-canary.5...v1.0.0-canary.6) (2024-09-13)
+
+
+### Features
+
+* Deterministic Passkey Generation ENG-487 ([#23](https://github.com/algorandfoundation/liquid-auth-android/issues/23)) ([f271bc4](https://github.com/algorandfoundation/liquid-auth-android/commit/f271bc46ac51a0f21345e2eee8705c09c18c415b))
+
 # [1.0.0-canary.5](https://github.com/algorandfoundation/liquid-auth-android/compare/v1.0.0-canary.4...v1.0.0-canary.5) (2024-09-03)
 
 
