@@ -1,0 +1,110 @@
+package co.algorand.liquid.wallet.data
+
+import android.content.Context
+import co.algorand.liquid.wallet.data.model.Passkey
+import co.algorand.liquid.wallet.data.model.PasskeyMetadata
+import co.algorand.liquid.wallet.data.model.Secret
+import co.algorand.liquid.wallet.data.model.Site
+import co.algorand.liquid.wallet.data.query.SiteWithPasskeys
+import kotlinx.coroutines.flow.Flow
+
+
+class CredentialRepository(
+    private val credentialDao: CredentialDao,
+    private val applicationContext: Context,
+) {
+    // UI lookups
+    fun siteListWithCredentials(): Flow<List<SiteWithPasskeys>> {
+        return credentialDao.siteListWithCredentials()
+    }
+
+    fun credentialsForSite(url: String?): SiteWithPasskeys? {
+        if (url == null) {
+            return null
+        }
+        return credentialDao.getCredentialsFromSite(url)
+    }
+
+    // Secret Handlers
+    suspend fun getSecret(address: String): Secret? {
+        return credentialDao.getSecret(address)
+    }
+    suspend fun addSecret(secret: Secret): Long {
+        return credentialDao.insertSecret(secret)
+    }
+    suspend fun deleteSecret(secret: Secret) {
+        return credentialDao.deleteSecret(secret)
+    }
+
+
+    // Site Mutations
+    private suspend fun addSite(siteMetaData: Site): Long {
+        return credentialDao.insertSite(siteMetaData)
+    }
+
+    private suspend fun deleteSite(entity: Site) {
+        return credentialDao.deleteSite(entity)
+    }
+
+
+    // Passkey Mutations
+    suspend fun updatePasskey(passkey: Passkey) {
+        credentialDao.updatePasskey(passkey)
+    }
+    suspend fun removePasskey(passkey: Passkey) {
+        val siteId = passkey.siteId
+        credentialDao.deletePasskey(passkey)
+        if (credentialDao.countPasskeys(siteId) == 0) {
+            credentialDao.deleteSite(Site(id = siteId))
+        }
+    }
+    suspend fun addNewPasskey(passkeyMetadata: PasskeyMetadata) {
+        val site = credentialDao.getSite(passkeyMetadata.rpid)
+        val siteId = site?.id ?: addSite(Site(url = passkeyMetadata.rpid, name = ""))
+
+        val secret = credentialDao.getSecret(passkeyMetadata.rpid)
+
+        credentialDao.insertPasskey(
+            Passkey(
+                userId = passkeyMetadata.uid,
+                username = passkeyMetadata.username,
+                userHandle = passkeyMetadata.displayName,
+                credentialId = passkeyMetadata.credId,
+                publicKey = "",
+                privateKey = passkeyMetadata.credPrivateKey,
+                siteId = siteId,
+                count = 0,
+                secretId = 0,
+                lastUsedTimeMs = 0L,
+            ),
+        )
+    }
+
+    fun getPasskey(credId: String): Passkey? {
+        return credentialDao.getPasskey(credId)
+    }
+    fun getPasskeysCount(siteId: String?): Int {
+        if (siteId == null) {
+            return 0
+        }
+
+        val credentialsFromSite = credentialDao.getCredentialsFromSite(siteId)
+
+        if (credentialsFromSite != null) {
+            return credentialsFromSite.passkeys.size
+        }
+
+        return 0
+    }
+    companion object {
+        private const val CREATE_PASSKEY_INTENT =
+            "co.algorand.auth.wallet.CREATE_PASSKEY"
+        private const val GET_PASSKEY_INTENT =
+            "co.algorand.auth.wallet.GET_PASSKEY"
+        const val KEY_ACCOUNT_LAST_USED_MS = "key_account_last_used_ms"
+        const val KEY_ACCOUNT_ID = "key_account_id"
+        const val USER_ACCOUNT = "user_account"
+        const val CREDENTIAL_DESCRIPTION =
+            "Your credential will be saved securely to the chosen account."
+    }
+}

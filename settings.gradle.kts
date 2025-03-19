@@ -22,3 +22,4 @@ dependencyResolutionManagement {
 rootProject.name = "foundation.algorand.demo"
 include(":demo")
 include(":liquid")
+include(":wallet")

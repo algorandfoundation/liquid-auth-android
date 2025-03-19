@@ -124,26 +124,6 @@ class AnswerActivity : AppCompatActivity() {
                             BuildConfig.NODELY_TURN_USERNAME,
                             BuildConfig.NODELY_TURN_CREDENTIAL
                     ),
-                    createIceServer(
-                            "turn:global.relay.metered.ca:80",
-                            BuildConfig.TURN_USERNAME,
-                            BuildConfig.TURN_CREDENTIAL
-                    ),
-                    createIceServer(
-                            "turn:global.relay.metered.ca:80?transport=tcp",
-                            BuildConfig.TURN_USERNAME,
-                            BuildConfig.TURN_CREDENTIAL
-                    ),
-                    createIceServer(
-                            "turn:global.relay.metered.ca:443",
-                            BuildConfig.TURN_USERNAME,
-                            BuildConfig.TURN_CREDENTIAL
-                    ),
-                    createIceServer(
-                            "turns:global.relay.metered.ca:443?transport=tcp",
-                            BuildConfig.TURN_USERNAME,
-                            BuildConfig.TURN_CREDENTIAL
-                    )
             )
 
     private var mBounded = false

@@ -1,14 +1,14 @@
 plugins {
     id("com.android.library")
     id("org.jetbrains.kotlin.android")
-    id("org.jetbrains.kotlin.kapt")
     id("dagger.hilt.android.plugin")
+    alias(libs.plugins.devtools.ksp)
     `maven-publish`
 }
 
 android {
     namespace = "foundation.algorand.auth"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         minSdk = 24
@@ -24,14 +24,14 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
     }
     buildFeatures {
         buildConfig = true
     }
     kotlinOptions {
-        jvmTarget = "17"
+        jvmTarget = "11"
     }
 }
 
@@ -53,40 +53,36 @@ publishing {
 }
 dependencies {
     // AlgoSDK
-    implementation("com.algorand:algosdk:2.4.0")
+    implementation(libs.algosdk)
     // FIDO2
-    implementation("com.google.android.gms:play-services-fido:21.0.0")
+    implementation(libs.play.services.fido)
     // Barcode Scanner
-    implementation("com.google.mlkit:barcode-scanning-common:17.0.0")
-    implementation("com.google.mlkit:camera:16.0.0-beta3")
+    implementation(libs.barcode.scanning.common)
+    implementation(libs.camera)
     // Signaling Service
-    implementation("io.socket:socket.io-client:2.1.0")
-    implementation("io.getstream:stream-webrtc-android:1.1.3")
+    implementation(libs.socket.io.client)
+    implementation(libs.stream.webrtc.android)
     // QR Code Generator
-    implementation("io.github.g0dkar:qrcode-kotlin:4.1.1")
+    implementation(libs.qrcode.kotlin)
 
-    implementation("androidx.core:core-ktx:1.12.0")
+    implementation(libs.androidx.core.ktx)
 
-    val coroutineVersion by extra { "1.7.1" }
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:$coroutineVersion")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutineVersion")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:$coroutineVersion")
+    implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.kotlinx.coroutines.play.services)
 
-    val hiltVersion by extra { "2.48" }
-    implementation("com.google.dagger:hilt-android:$hiltVersion")
-    kapt("com.google.dagger:hilt-compiler:$hiltVersion")
-    kapt("androidx.hilt:hilt-compiler:1.2.0")
+    implementation(libs.hilt.android)
+    ksp(libs.hilt.compiler)
 
-    val okhttpVersion by extra { "4.12.0" }
-    implementation("com.squareup.okhttp3:okhttp:$okhttpVersion")
-    implementation("ru.gildor.coroutines:kotlin-coroutines-okhttp:1.0")
+    implementation(libs.okhttp)
+    implementation(libs.kotlin.coroutines.okhttp)
 
     // UUID Generator
-    implementation("com.fasterxml.uuid:java-uuid-generator:5.1.0")
+    implementation(libs.java.uuid.generator)
 
     // Dev Dependencies
-    testImplementation("junit:junit:4.13.2")
-    testImplementation("io.mockk:mockk:1.12.0")
-    androidTestImplementation("androidx.test.ext:junit:1.1.5")
-    androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
+    testImplementation(libs.junit)
+    testImplementation(libs.mockk)
+    androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(libs.androidx.espresso.core)
 }

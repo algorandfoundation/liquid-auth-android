@@ -1,17 +1,15 @@
-val TURN_USERNAME: String = "fc7708976bf5d60be20c5a1d"
-val TURN_CREDENTIAL: String = "sVpEREQGGhXOw4gX"
 val NODELY_TURN_USERNAME = "liquid-auth"
 val NODELY_TURN_CREDENTIAL = "sqmcP4MiTKMT4TGEDSk9jgHY"
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
-    id("org.jetbrains.kotlin.kapt")
     id("dagger.hilt.android.plugin")
+    alias(libs.plugins.devtools.ksp)
 }
 
 android {
     namespace = "foundation.algorand.demo"
-    compileSdk = 34
+    compileSdk = 35
     extracted()
     defaultConfig {
         applicationId = "foundation.algorand.demo"
@@ -20,8 +18,6 @@ android {
         versionCode = 1
         versionName = "1.0"
 
-        buildConfigField("String", "TURN_USERNAME", "\"$TURN_USERNAME\"")
-        buildConfigField("String", "TURN_CREDENTIAL", "\"$TURN_CREDENTIAL\"")
         buildConfigField("String", "NODELY_TURN_USERNAME", "\"$NODELY_TURN_USERNAME\"")
         buildConfigField("String", "NODELY_TURN_CREDENTIAL", "\"$NODELY_TURN_CREDENTIAL\"")
 
@@ -48,11 +44,11 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
     }
     kotlinOptions {
-        jvmTarget = "17"
+        jvmTarget = "11"
     }
     buildFeatures {
         viewBinding = true
@@ -65,74 +61,74 @@ dependencies {
     implementation(project(mapOf("path" to ":liquid")))
     implementation(files("libs/provider-debug.aar"))
     implementation(files("libs/crypto-debug.aar"))
-    implementation("com.fasterxml.uuid:java-uuid-generator:5.1.0")
+    implementation(libs.java.uuid.generator)
 
 
-    implementation("com.fasterxml.jackson.core:jackson-annotations:2.16.1")
-    implementation("org.msgpack:jackson-dataformat-msgpack:0.9.8")
-    implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-cbor:2.16.1")
-    implementation("net.pwall.json:json-kotlin-schema:0.46")
+    implementation(libs.jackson.annotations)
+    implementation(libs.jackson.dataformat.msgpack)
+    implementation(libs.jackson.dataformat.cbor)
+    implementation(libs.json.kotlin.schema)
 
     // Algorand SDK
-    implementation("com.algorand:algosdk:2.4.0")
-    implementation("org.bouncycastle:bcprov-jdk15on:1.67")
+    implementation(libs.algosdk)
+    implementation(libs.bcprov.jdk15on)
 
     // FIDO2 - Deprecated
-    implementation("com.google.android.gms:play-services-fido:20.1.0")
+    implementation(libs.play.services.fido)
 
     // Barcode Reader
-    implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
+    implementation(libs.play.services.code.scanner)
 
     // Credentials
+    // MUST BE PINNED!
     implementation("androidx.credentials:credentials:1.2.2")
     implementation("androidx.credentials:credentials-play-services-auth:1.2.2")
 
     // Deterministic Passkeys
     implementation(files("libs/dP256.jar"))
-    implementation("cash.z.ecc.android:kotlin-bip39:1.0.8")
+    implementation(libs.kotlin.bip39)
 
     // Kotlin Coroutine
     val coroutineVersion by extra { "1.7.1" }
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:$coroutineVersion")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutineVersion")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:$coroutineVersion")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0")
+    implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.kotlinx.coroutines.play.services)
+    implementation(libs.androidx.lifecycle.viewmodel.ktx)
+
+
+    implementation(libs.camera)
+    implementation(libs.barcode.scanning.common)
+    implementation(libs.androidx.biometric.ktx)
+
     // Dagger/Hilt
-    val hiltVersion by extra { "2.48" }
-    implementation("com.google.dagger:hilt-android:$hiltVersion")
-    implementation("com.google.mlkit:camera:16.0.0-beta3")
-    implementation("androidx.legacy:legacy-support-v4:1.0.0")
-    implementation("com.google.mlkit:barcode-scanning-common:17.0.0")
-    implementation("androidx.biometric:biometric-ktx:1.2.0-alpha05")
-    kapt("com.google.dagger:hilt-compiler:$hiltVersion")
-    kapt("androidx.hilt:hilt-compiler:1.2.0")
+    implementation(libs.hilt.android)
+    ksp(libs.hilt.compiler)
+    ksp(libs.androidx.hilt.compiler)
     // Rooms
-    val room_version = "2.6.1"
-    implementation("androidx.room:room-ktx:$room_version")
-    implementation("androidx.room:room-runtime:$room_version")
-    kapt("androidx.room:room-compiler:$room_version")
+    implementation(libs.androidx.room.ktx)
+    implementation(libs.androidx.room.runtime)
+    ksp(libs.androidx.room.compiler)
     // HTTP Requests
-    val okhttpVersion by extra { "4.12.0" }
-    implementation("com.squareup.okhttp3:okhttp:$okhttpVersion")
-    implementation("com.squareup.okhttp3:logging-interceptor:$okhttpVersion")
-    implementation("ru.gildor.coroutines:kotlin-coroutines-okhttp:1.0")
-    implementation("io.socket:socket.io-client:2.1.0")
-    implementation("io.getstream:stream-webrtc-android:1.1.3")
+    implementation(libs.okhttp)
+    implementation(libs.logging.interceptor)
+    implementation(libs.kotlin.coroutines.okhttp)
+    implementation(libs.socket.io.client)
+    implementation(libs.stream.webrtc.android)
 
     // Core
-    implementation("androidx.core:core-ktx:1.12.0")
-    implementation("androidx.appcompat:appcompat:1.6.1")
-    implementation("androidx.activity:activity-ktx:1.8.2")
-    implementation("androidx.fragment:fragment-ktx:1.7.1")
-    implementation("com.google.android.material:material:1.11.0")
-    implementation("androidx.constraintlayout:constraintlayout:2.1.4")
-    implementation("androidx.lifecycle:lifecycle-livedata-ktx:2.6.2")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.6.2")
+    implementation(libs.androidx.core.ktx)
+    implementation("androidx.appcompat:appcompat:1.7.0")
+    implementation("androidx.activity:activity-ktx:1.10.1")
+    implementation("androidx.fragment:fragment-ktx:1.8.6")
+    implementation("com.google.android.material:material:1.12.0")
+    implementation("androidx.constraintlayout:constraintlayout:2.2.1")
+    implementation(libs.androidx.lifecycle.livedata.ktx)
+    implementation(libs.androidx.lifecycle.viewmodel.ktx)
 
     // Dev Dependencies
-    testImplementation("junit:junit:4.13.2")
-    androidTestImplementation("androidx.test.ext:junit:1.1.5")
-    androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
+    testImplementation(libs.junit)
+    androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(libs.androidx.espresso.core)
 }
 
 fun Build_gradle.extracted() {
