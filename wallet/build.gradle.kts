@@ -46,7 +46,7 @@ android {
 }
 
 dependencies {
-
+    implementation(project(mapOf("path" to ":liquid")))
     // Android Compose
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
@@ -71,6 +71,10 @@ dependencies {
     implementation(libs.jna)
     implementation(libs.xhdwalletapi.android)
     implementation(libs.kotlin.bip39)
+
+    // HTTP/Webrtc
+    implementation(libs.okhttp)
+    implementation(libs.stream.webrtc.android)
 
     // Test Resources
     testImplementation(libs.junit)

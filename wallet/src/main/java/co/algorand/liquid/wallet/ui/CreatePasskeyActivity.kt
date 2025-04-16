@@ -1,30 +1,23 @@
-/*
- * Copyright 2024 The Android Open Source Project
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package co.algorand.liquid.wallet.ui
 
 import android.app.Activity
+import android.app.NotificationManager
+import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
+import android.content.ServiceConnection
 import android.content.pm.SigningInfo
 import android.os.Bundle
+import android.os.IBinder
 import android.util.Base64
 import android.util.Log
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.viewModels
 import androidx.biometric.BiometricManager.Authenticators
 import androidx.biometric.BiometricPrompt
 import androidx.biometric.BiometricPrompt.PromptInfo.Builder
+import androidx.core.app.NotificationCompat.Builder as NotificationBuilder
+
 import androidx.credentials.CreatePublicKeyCredentialRequest
 import androidx.credentials.CreatePublicKeyCredentialResponse
 import androidx.credentials.exceptions.GetCredentialUnknownException
@@ -32,6 +25,7 @@ import androidx.credentials.provider.CallingAppInfo
 import androidx.credentials.provider.PendingIntentHandler
 import androidx.credentials.provider.ProviderCreateCredentialRequest
 import androidx.fragment.app.FragmentActivity
+import androidx.lifecycle.lifecycleScope
 import co.algorand.liquid.wallet.AppDependencies
 import co.algorand.liquid.wallet.BiometricErrorUtils
 import co.algorand.liquid.wallet.R
@@ -43,10 +37,16 @@ import co.algorand.liquid.wallet.fido.FidoPublicKeyCredential
 import co.algorand.liquid.wallet.fido.PublicKeyCredentialCreationOptions
 import co.algorand.liquid.wallet.encoding.appInfoToOrigin
 import co.algorand.liquid.wallet.encoding.b64Encode
+import co.algorand.liquid.wallet.fido.Cookies
+import foundation.algorand.auth.connect.SignalService
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import okhttp3.OkHttpClient
+import org.json.JSONObject
+import org.webrtc.PeerConnection
 import java.math.BigInteger
 import java.net.URL
 import java.security.KeyPair
@@ -56,18 +56,26 @@ import java.security.interfaces.ECPrivateKey
 import java.security.interfaces.ECPublicKey
 import java.security.spec.ECGenParameterSpec
 import java.time.Instant
+import kotlin.getValue
 
-/**
- * This class is responsible for handling the public key credential (Passkey) creation request from a Relying Party i.e calling app
- */
 class CreatePasskeyActivity : FragmentActivity() {
-    private val credentialsRepository = AppDependencies.credentialsRepository
+    private var signalService: SignalService? = null
+    private val notifications: NotificationViewModel by viewModels()
 
+    private val credentialsRepository = AppDependencies.credentialsRepository
+    private val cookieJar = Cookies()
+    private val iceServers = listOf(
+        PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer(),
+        PeerConnection.IceServer.builder("stun:stun1.l.google.com:19302").createIceServer(),
+        PeerConnection.IceServer.builder("stun:stun2.l.google.com:19302").createIceServer(),
+    )
     override fun onCreate(savedInstanceState: Bundle?) {
-        Log.d("YOOOO", "YOOOOOOOOO HOMMIE WE ARE CREATING A PASKEY")
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
 
+        notifications.createChannels(
+            getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+        )
         val request = PendingIntentHandler.retrieveProviderCreateCredentialRequest(intent)
 
         if (request == null) {
@@ -75,6 +83,48 @@ class CreatePasskeyActivity : FragmentActivity() {
             setUpFailureResponseAndFinish("Unable to extract request from intent")
             return
         }
+
+        val startIntent = Intent(this, SignalService::class.java)
+        startService(startIntent)
+        bindService(startIntent, object : ServiceConnection {
+            override fun onServiceDisconnected(name: ComponentName) {
+                signalService = null
+            }
+
+            override fun onServiceConnected(name: ComponentName, service: IBinder) {
+                val mLocalBinder = service as SignalService.LocalBinder
+                signalService = mLocalBinder.getServerInstance()
+
+                if(request.callingRequest is CreatePublicKeyCredentialRequest){
+                    val publicKeyRequest: CreatePublicKeyCredentialRequest =
+                        request.callingRequest as CreatePublicKeyCredentialRequest
+                    val accountId = intent.getStringExtra(KEY_ACCOUNT_ID)
+
+                    var httpClient = OkHttpClient.Builder()
+                        .cookieJar(cookieJar)
+                        .build()
+//                    val requestId = SignalClient.generateRequestId()
+//                    val signalClient = SignalClient(publicKeyRequest.origin!!, this@CreatePasskeyActivity, httpClient)
+                    val notification =  NotificationBuilder(this@CreatePasskeyActivity, "notification_channel")
+                        .setContentTitle("My Application")
+                        .setContentText("Connect")
+                    signalService!!.start(
+                        publicKeyRequest.origin!!,
+                        httpClient,
+                        notifications.createNotificationBuilder(this@CreatePasskeyActivity),
+                        NotificationViewModel.SERVICE_NOTIFICATION_ID,
+                        CreatePasskeyActivity::class.java
+                    )
+                    var data = JSONObject(publicKeyRequest.requestJson)
+                    lifecycleScope.launch {
+                        var dc = signalService!!.peer(data.get("challenge") as String, "offer", iceServers)
+                        Log.d("YPPP", "We did it homies")
+                    }
+                }
+            }
+        }, BIND_AUTO_CREATE)
+
+
 
         handleCreatePublicKeyCredentialRequest(request)
     }

@@ -162,7 +162,6 @@ class PasskeyService(private var serviceRepository: ServiceRepository = AppDepen
      * @return A PendingIntent that can be used to launch the app's open/unlock flow.
      */
     private fun createPendingIntent(counter: AtomicInteger, intentType: String): PendingIntent {
-        Log.d("YOOO", applicationContext.packageName)
         val intent = Intent(intentType).setPackage(applicationContext.packageName)
         return PendingIntent.getActivity(
             applicationContext,
