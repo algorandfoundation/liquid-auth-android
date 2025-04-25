@@ -1,4 +1,4 @@
-package co.algorand.liquid.wallet.ui.home
+package co.algorand.liquid.wallet.ui.credentials
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
@@ -40,14 +40,7 @@ import co.algorand.liquid.wallet.data.model.Passkey
 import co.algorand.liquid.wallet.data.model.Site
 import co.algorand.liquid.wallet.data.query.SiteWithPasskeys
 
-/**
- * This composable holds the UI logic to show credential details of selected domain/calling app
- * @param site : selected domain/site
- * @param onCancel : method to call on back press
- * @param onPasswordDelete : method to call on selected password credential delete
- * @param onPasskeyDelete : method to call on selected passkey credential delete
- * @param modifier : modifier for the composable
- */
+
 @Composable
 fun ShowCredentialsScreen(
     site: SiteWithPasskeys,
@@ -66,16 +59,6 @@ fun ShowCredentialsScreen(
     )
 }
 
-/**
- * This composable holds the UI logic to show credential details of selected domain/calling app
- *
- * @param snackbarHostState The state of the SnackbarHost
- * @param site The selected domain/site
- * @param onCancel The callback to be invoked when the user clicks the back button
- * @param onPasswordDelete The callback to be invoked when the user clicks the delete button for a password credential
- * @param onPasskeyDelete The callback to be invoked when the user clicks the delete button for a passkey credential
- * @param modifier The modifier to be applied to the composable
- */
 @Composable
 fun ShowCredentialsScreen(
     snackbarHostState: SnackbarHostState,
@@ -99,13 +82,6 @@ fun ShowCredentialsScreen(
     }
 }
 
-/**
- * This composable holds the UI logic to show the top app bar with the site name and a back button.
- *
- * @param site The selected domain/site
- * @param onCancel The callback to be invoked when the user clicks the back button
- * @param modifier The modifier to be applied to the composable
- */
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
 private fun TopAppBarContent(
@@ -137,15 +113,6 @@ private fun TopAppBarContent(
     )
 }
 
-/**
- * Renders the credential entries for the selected domain/site.
- *
- * @param innerPadding The padding to apply to the inner content.
- * @param site The SiteWithCredentials object representing the site and its credentials.
- * @param onPasskeyDelete The callback to be invoked when a passkey is deleted.
- * @param onPasswordDelete The callback to be invoked when a password is deleted.
- * @param modifier The modifier to be applied to the composable.
- */
 @Composable
 private fun CredentialsEntry(
     innerPadding: PaddingValues,
@@ -174,13 +141,6 @@ private fun CredentialsEntry(
 
 
 
-/**
- * This composable holds the UI logic to render a single passkey entry.
- *
- * @param passkey The PasskeyItem object representing the passkey
- * @param onPasskeyDelete The callback to be invoked when the user clicks the delete button
- * @param modifier The modifier to be applied to the composable
- */
 @Composable
 fun PasskeyEntry(
     passkey: Passkey,
@@ -220,9 +180,6 @@ fun PasskeyEntry(
     }
 }
 
-/**
- * This composable function provides a preview of the ShowCredentialsScreen composable.
- */
 @Preview
 @Composable
 fun ShowCredentialsScreenPreview() {

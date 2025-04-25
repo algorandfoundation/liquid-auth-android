@@ -64,7 +64,7 @@ import java.security.spec.ECPrivateKeySpec
  */
 class GetPasskeyActivity : FragmentActivity() {
 
-    private val credentialRepository = AppDependencies.credentialsRepository
+    private val credentialRepository = AppDependencies.keysRepository
 
     public override fun onCreate(savedInstanceState: Bundle?) {
         Log.d(TAG, "YOOOOOOOOO HOMMIE WE ARE GEETTING A PASKEY")

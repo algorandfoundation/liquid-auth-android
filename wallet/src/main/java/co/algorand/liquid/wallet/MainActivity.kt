@@ -1,73 +1,78 @@
 package co.algorand.liquid.wallet
 
-import android.content.ComponentName
-import android.content.Context
-import android.content.Intent
-import android.content.ServiceConnection
 import android.os.Bundle
-import android.os.IBinder
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
-import co.algorand.liquid.wallet.fido.Cookies
-import co.algorand.liquid.wallet.ui.home.HomeScreen
-import co.algorand.liquid.wallet.ui.home.HomeViewModel
+import androidx.navigation.NavHostController
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import co.algorand.liquid.wallet.ui.credentials.CredentialScreen
+import co.algorand.liquid.wallet.ui.credentials.CredentialsViewModel
+import co.algorand.liquid.wallet.ui.keys.KeyScreen
+import co.algorand.liquid.wallet.ui.keys.KeyViewModel
 import co.algorand.liquid.wallet.ui.theme.LiquidTheme
 import foundation.algorand.auth.connect.SignalService
-import okhttp3.OkHttpClient
 
 class MainActivity : ComponentActivity() {
     private var signalService: SignalService? = null
 
-    private var viewModel = HomeViewModel(
-        credentialRepository = AppDependencies.credentialsRepository,
-        RPIconDataSource = AppDependencies.rpIconDataSource
+    val scanner = AppDependencies.scanner
+
+    private val keyManager = AppDependencies.mnemonicManager
+    private var rootKey: String? = null
+
+    private var credentialViewModel = CredentialsViewModel(
+        scanner = scanner,
+        keysRepository = AppDependencies.keysRepository,
     )
+
+    private var keyViewModel = KeyViewModel(
+        keysRepository = AppDependencies.keysRepository,
+        keyManager = keyManager,
+    )
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        val startIntent = Intent(this, SignalService::class.java)
-        startService(startIntent)
-        bindService(startIntent, object : ServiceConnection {
-            override fun onServiceDisconnected(name: ComponentName) {
-                signalService = null
-            }
-
-            override fun onServiceConnected(name: ComponentName, service: IBinder) {
-                val mLocalBinder = service as SignalService.LocalBinder
-                signalService = mLocalBinder.getServerInstance()
-            }
-        }, BIND_AUTO_CREATE)
-
+        rootKey = keyManager.fetch()?.joinToString(" ")
+        Log.d("MAIN", "${rootKey}")
         enableEdgeToEdge()
+
         setContent {
             LiquidTheme {
-                    HomeScreen(
-                        homeViewModel = viewModel,
-                        openDrawer = {},
-                    )
+                val navController = rememberNavController()
+                MainApp(rootKey, navController, credentialViewModel, keyViewModel)
             }
         }
     }
 }
 
 @Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
-        modifier = modifier
-    )
-}
-
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview() {
-    LiquidTheme {
-        Greeting("Android")
+fun MainApp(
+    rootKey: String?,
+    navController: NavHostController,
+    credentialsViewModel: CredentialsViewModel,
+    keyViewModel: KeyViewModel,
+) {
+    var startDestination = "keys"
+    if (rootKey != null) {
+        startDestination = "credentials"
+    }
+    NavHost(navController = navController, startDestination = startDestination) { // Replace "home" with your starting route
+        composable("credentials") {
+            CredentialScreen(
+                navController = navController,
+                onScan = {},
+                credentialsViewModel = credentialsViewModel
+            )
+        }
+        composable("keys") { KeyScreen(
+            navController = navController,
+            keyViewModel = keyViewModel
+        )
+        }
     }
 }

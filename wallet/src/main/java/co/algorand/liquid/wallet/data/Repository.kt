@@ -1,18 +1,25 @@
 package co.algorand.liquid.wallet.data
 
 import android.content.Context
+import co.algorand.liquid.wallet.crypto.MnemonicManager
 import co.algorand.liquid.wallet.data.model.Passkey
 import co.algorand.liquid.wallet.data.model.PasskeyMetadata
-import co.algorand.liquid.wallet.data.model.Secret
 import co.algorand.liquid.wallet.data.model.Site
 import co.algorand.liquid.wallet.data.query.SiteWithPasskeys
 import kotlinx.coroutines.flow.Flow
 
 
-class CredentialRepository(
+class KeysRepository(
+    private val mnemonicManager: MnemonicManager,
     private val credentialDao: CredentialDao,
     private val applicationContext: Context,
 ) {
+    suspend fun clear() {
+        credentialDao.clearPasskeys()
+        credentialDao.clearSites()
+        mnemonicManager.clear()
+    }
+
     // UI lookups
     fun siteListWithCredentials(): Flow<List<SiteWithPasskeys>> {
         return credentialDao.siteListWithCredentials()
@@ -24,18 +31,6 @@ class CredentialRepository(
         }
         return credentialDao.getCredentialsFromSite(url)
     }
-
-    // Secret Handlers
-    suspend fun getSecret(address: String): Secret? {
-        return credentialDao.getSecret(address)
-    }
-    suspend fun addSecret(secret: Secret): Long {
-        return credentialDao.insertSecret(secret)
-    }
-    suspend fun deleteSecret(secret: Secret) {
-        return credentialDao.deleteSecret(secret)
-    }
-
 
     // Site Mutations
     private suspend fun addSite(siteMetaData: Site): Long {
@@ -62,19 +57,16 @@ class CredentialRepository(
         val site = credentialDao.getSite(passkeyMetadata.rpid)
         val siteId = site?.id ?: addSite(Site(url = passkeyMetadata.rpid, name = ""))
 
-        val secret = credentialDao.getSecret(passkeyMetadata.rpid)
-
         credentialDao.insertPasskey(
             Passkey(
                 userId = passkeyMetadata.uid,
                 username = passkeyMetadata.username,
                 userHandle = passkeyMetadata.displayName,
                 credentialId = passkeyMetadata.credId,
-                publicKey = "",
+                publicKey = passkeyMetadata.credPublicKey,
                 privateKey = passkeyMetadata.credPrivateKey,
                 siteId = siteId,
                 count = 0,
-                secretId = 0,
                 lastUsedTimeMs = 0L,
             ),
         )

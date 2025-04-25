@@ -8,5 +8,5 @@ data class PasskeyMetadata(
     val displayName: String,
     val credId: String,
     val credPrivateKey: String,
-    val credParentKey: Long?
+    val credPublicKey: String,
 )

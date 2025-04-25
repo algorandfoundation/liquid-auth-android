@@ -46,35 +46,44 @@ android {
 }
 
 dependencies {
+    // Algorand Foundation Integration
+    implementation(files("libs/dP256.jar"))
+    implementation("net.java.dev.jna:jna:5.14.0@aar")
+    implementation(libs.xhdwalletapi.android)
+    implementation(libs.kotlin.bip39)
+    // Liquid Auth
     implementation(project(mapOf("path" to ":liquid")))
+    // HTTP/Webrtc
+    implementation(libs.okhttp)
+    implementation(libs.stream.webrtc.android)
+
+    // Credentials and Scanner
+    implementation(libs.androidx.credential.manager)
+    implementation(libs.play.services.code.scanner)
+    implementation(libs.androidx.biometrics)
+
     // Android Compose
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecyle.runtime.compose)
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
+    // UI
     implementation(libs.androidx.ui)
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
 
-    // CredentialProviderService
-    implementation(libs.androidx.credential.manager)
+    // Preferences
+    implementation("androidx.datastore:datastore-preferences:1.1.4")
+    implementation("androidx.datastore:datastore:1.1.4")
+
+    // Database
     implementation(libs.androidx.room.ktx)
     implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.navigation.compose)
     ksp(libs.androidx.room.compiler)
     annotationProcessor(libs.androidx.room.compiler)
-    implementation(libs.androidx.biometrics)
-
-    // Algorand Foundation Integration
-//    implementation(files("libs/dP256.jar"))
-    implementation(libs.jna)
-    implementation(libs.xhdwalletapi.android)
-    implementation(libs.kotlin.bip39)
-
-    // HTTP/Webrtc
-    implementation(libs.okhttp)
-    implementation(libs.stream.webrtc.android)
 
     // Test Resources
     testImplementation(libs.junit)

@@ -35,7 +35,12 @@
     <string name="manage_credentials">Manage Credentials</string>
     <string name="open">Open %1$s</string>
     <string name="lock">lock</string>
-    <string name="your_saved_credentials_appear_here">List of app credentials saved in Liquid from calling apps will appear here. Check the project\'s README for more details on how to enable MyVault in your device settings &amp; save/retrieve credentials through it.</string>
+    <string name="instructions">Instructions</string>
+    <string name="credentials_instructions">\u2022 The secret can be managed using 🔐. \n\u2022 Select an Origin to view the site specific keys \n\u2022 Use the scanner to connect P2P 🔄</string>
+    <string name="secrets_instructions">\u2022 Generate a key using [icon]. \n\u2022  \n\u2022 Use the scanner to connect P2P 🔄</string>
+    <string name="credentials_not_found">Credentials Not Found</string>
+    <string name="webauthn">WebAuthn</string>
+    <string name="liquid_auth">Liquid Auth</string>
     <string name="credentials_for">Credentials for %1$s</string>
     <string name="text_continue">Continue</string>
     <string name="liquid">Liquid</string>

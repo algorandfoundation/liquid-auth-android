@@ -20,15 +20,13 @@ data class Passkey(
     @ColumnInfo(name = "username") val username: String,
     @ColumnInfo(name = "userHandle") val userHandle: String,
 
-    // FIXME: Not secure storage of keys, this is just for demonstration
-    // Credential Storage
+    // Key Information
     @ColumnInfo(name = "publicKey") val publicKey: String,
     @ColumnInfo(name = "privateKey") val privateKey: String,
     @ColumnInfo(name = "credentialId") val credentialId: String,
+
     @ColumnInfo(name = "count") val count: Int,
     @ColumnInfo(name = "lastUsedTimeMs") val lastUsedTimeMs: Long,
-
     // Lookup Columns
     @ColumnInfo(name = "siteId") val siteId: Long,
-    @ColumnInfo(name = "secretId") val secretId: Long,
 )

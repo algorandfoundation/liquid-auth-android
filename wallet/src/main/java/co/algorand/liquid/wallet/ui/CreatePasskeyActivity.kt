@@ -3,7 +3,6 @@ package co.algorand.liquid.wallet.ui
 import android.app.Activity
 import android.app.NotificationManager
 import android.content.ComponentName
-import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
 import android.content.pm.SigningInfo
@@ -62,7 +61,8 @@ class CreatePasskeyActivity : FragmentActivity() {
     private var signalService: SignalService? = null
     private val notifications: NotificationViewModel by viewModels()
 
-    private val credentialsRepository = AppDependencies.credentialsRepository
+    private val xHDKeyManager = AppDependencies.xHDKeyManager
+    private val credentialsRepository = AppDependencies.keysRepository
     private val cookieJar = Cookies()
     private val iceServers = listOf(
         PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer(),
@@ -84,6 +84,7 @@ class CreatePasskeyActivity : FragmentActivity() {
             return
         }
 
+        // TODO: see what UX options we have to trigger the service, it may be ideal to just use the deeplink
         val startIntent = Intent(this, SignalService::class.java)
         startService(startIntent)
         bindService(startIntent, object : ServiceConnection {
@@ -103,8 +104,6 @@ class CreatePasskeyActivity : FragmentActivity() {
                     var httpClient = OkHttpClient.Builder()
                         .cookieJar(cookieJar)
                         .build()
-//                    val requestId = SignalClient.generateRequestId()
-//                    val signalClient = SignalClient(publicKeyRequest.origin!!, this@CreatePasskeyActivity, httpClient)
                     val notification =  NotificationBuilder(this@CreatePasskeyActivity, "notification_channel")
                         .setContentTitle("My Application")
                         .setContentText("Connect")
@@ -118,13 +117,10 @@ class CreatePasskeyActivity : FragmentActivity() {
                     var data = JSONObject(publicKeyRequest.requestJson)
                     lifecycleScope.launch {
                         var dc = signalService!!.peer(data.get("challenge") as String, "offer", iceServers)
-                        Log.d("YPPP", "We did it homies")
                     }
                 }
             }
         }, BIND_AUTO_CREATE)
-
-
 
         handleCreatePublicKeyCredentialRequest(request)
     }
@@ -151,7 +147,6 @@ class CreatePasskeyActivity : FragmentActivity() {
      */
     private fun handleCreatePublicKeyCredentialRequest(request: ProviderCreateCredentialRequest) {
         val accountId = intent.getStringExtra(KEY_ACCOUNT_ID)
-        Log.d("YOOOO", "handleCreatePublicKeyCredentialRequest")
         // Retrieve the BiometricPromptResult from the request.
         val biometricPromptResult = request.biometricPromptResult
 
@@ -303,15 +298,21 @@ class CreatePasskeyActivity : FragmentActivity() {
         val credentialId = ByteArray(32)
         SecureRandom().nextBytes(credentialId)
 
+        var callingOrigin = appInfoToOrigin(callingAppInfo)
+        val obj = JSONObject(requestJson)
+        val user = obj.getJSONObject("user")
+
+        val userHandle =if( user.has("name")) user.getString("name") else user.getString("displayName")
+
         // Generate key
-        val keyPair = generateKeyPair()
+        val keyPair = generateKeyPair(callingOrigin, userHandle)
 
         // Save the private key in your local database against callingAppInfo.packageName.
         savePasskeyInCredentialsDataStore(request, credentialId, keyPair)
 
         updateMetaInSharedPreferences(accountId)
 
-        var callingOrigin = appInfoToOrigin(callingAppInfo)
+
         if (callingAppInfoOrigin != null) {
             callingOrigin = callingAppInfoOrigin
         }
@@ -371,11 +372,8 @@ class CreatePasskeyActivity : FragmentActivity() {
      *
      * @return A new [KeyPair] instance.
      */
-    private fun generateKeyPair(): KeyPair {
-        val spec = ECGenParameterSpec(getString(R.string.secp_256_r1))
-        val keyPairGen = KeyPairGenerator.getInstance(getString(R.string.ec))
-        keyPairGen.initialize(spec)
-        return keyPairGen.genKeyPair()
+    private fun generateKeyPair(origin: String, userHandle: String): KeyPair {
+        return xHDKeyManager.generatePasskey(origin, userHandle)
     }
 
     /**
@@ -648,8 +646,8 @@ class CreatePasskeyActivity : FragmentActivity() {
                     username = request.user.name,
                     displayName = request.user.displayName,
                     credId = b64Encode(credId),
+                    credPublicKey = b64Encode((keyPair.public as ECPublicKey).encoded),
                     credPrivateKey = b64Encode((keyPair.private as ECPrivateKey).s.toByteArray()),
-                    credParentKey = 0
                 ),
             )
         }

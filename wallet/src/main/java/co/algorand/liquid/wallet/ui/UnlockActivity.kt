@@ -13,7 +13,6 @@ import androidx.credentials.provider.PendingIntentHandler
 import androidx.fragment.app.FragmentActivity
 import co.algorand.liquid.wallet.AppDependencies
 import co.algorand.liquid.wallet.R
-import co.algorand.liquid.wallet.data.CredentialRepository
 import co.algorand.liquid.wallet.data.ServiceRepository
 
 /**
@@ -36,7 +35,7 @@ class UnlockActivity : FragmentActivity() {
         super.onCreate(savedInstanceState)
 
         serviceRepo = ServiceRepository(
-            credentialRepository = AppDependencies.credentialsRepository,
+            keysRepository = AppDependencies.keysRepository,
             applicationContext
         )
 

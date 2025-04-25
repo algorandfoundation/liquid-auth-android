@@ -41,7 +41,7 @@ import java.io.IOException
 import java.time.Instant
 import java.util.concurrent.atomic.AtomicInteger
 
-class ServiceRepository (private val credentialRepository: CredentialRepository, private val applicationContext: Context) {
+class ServiceRepository (private val keysRepository: KeysRepository, private val applicationContext: Context) {
     private val requestCode: AtomicInteger = AtomicInteger()
     private val allowedAuthenticator =
         BiometricManager.Authenticators.BIOMETRIC_WEAK or BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.DEVICE_CREDENTIAL
@@ -102,7 +102,7 @@ class ServiceRepository (private val credentialRepository: CredentialRepository,
             val requestJsonObject = JSONObject(requestJson)
             val rp: JSONObject = requestJsonObject.getJSONObject("rp")
             val id: String = rp.getString("id")
-            passkeyCount = credentialRepository.getPasskeysCount(id)
+            passkeyCount = keysRepository.getPasskeysCount(id)
         }
 
         when (request) {
@@ -143,7 +143,7 @@ class ServiceRepository (private val credentialRepository: CredentialRepository,
             val request = PublicKeyCredentialRequestOptions(option.requestJson)
 
             // Get the credentials for the site specified in the request.
-            val credentials = credentialRepository.credentialsForSite(request.rpId) ?: return false
+            val credentials = keysRepository.credentialsForSite(request.rpId) ?: return false
 
             val passkeys = credentials.passkeys
             for (passkey in passkeys) {
@@ -163,14 +163,13 @@ class ServiceRepository (private val credentialRepository: CredentialRepository,
                     configurePublicKeyCredentialEntryBuilder(passkey, pendingIntent, option)
 
                 // Configure biometric prompt data
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
-                    entryBuilder.setBiometricPromptData(
-                        BiometricPromptData(
-                            cryptoObject = null,
-                            allowedAuthenticators = allowedAuthenticator,
-                        ),
-                    )
-                }
+                entryBuilder.setBiometricPromptData(
+                    BiometricPromptData(
+                        cryptoObject = null,
+                        allowedAuthenticators = allowedAuthenticator,
+                    ),
+                )
+
 
                 val entry = entryBuilder.build()
                 // Add the entry to the response builder.

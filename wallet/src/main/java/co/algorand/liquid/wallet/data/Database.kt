@@ -13,12 +13,11 @@ import androidx.room.RoomDatabase
 import androidx.room.Transaction
 import androidx.room.Update
 import co.algorand.liquid.wallet.data.model.Passkey
-import co.algorand.liquid.wallet.data.model.Secret
 import co.algorand.liquid.wallet.data.model.Site
 import co.algorand.liquid.wallet.data.query.SiteWithPasskeys
 import kotlinx.coroutines.flow.Flow
 
-@Database(entities = [Passkey::class, Secret::class, Site::class], version = 1)
+@Database(entities = [Passkey::class, Site::class], version = 1)
 abstract class CredentialDatabase : RoomDatabase() {
     abstract fun credentialDao(): CredentialDao
     companion object {
@@ -44,16 +43,6 @@ abstract class CredentialDatabase : RoomDatabase() {
 
 @Dao
 interface CredentialDao {
-    // Secret Methods
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertSecret(entity: Secret): Long
-    @Query("SELECT * from secrets WHERE address = :address")
-    suspend fun getSecret(address: String): Secret?
-    @Update
-    suspend fun updateSecret(entity: Secret)
-    @Delete
-    suspend fun deleteSecret(entity: Secret)
-
     // Passkey Methods
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertPasskey(entity: Passkey): Long
@@ -84,4 +73,10 @@ interface CredentialDao {
     @Query("SELECT * FROM sites ORDER BY url")
     fun siteListWithCredentials(): Flow<List<SiteWithPasskeys>>
 
+    @Transaction
+    @Query("DELETE FROM passkeys")
+    suspend fun clearPasskeys()
+    @Transaction
+    @Query("DELETE FROM sites")
+    suspend fun clearSites()
 }
