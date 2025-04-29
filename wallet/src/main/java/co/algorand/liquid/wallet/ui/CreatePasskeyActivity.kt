@@ -49,11 +49,9 @@ import org.webrtc.PeerConnection
 import java.math.BigInteger
 import java.net.URL
 import java.security.KeyPair
-import java.security.KeyPairGenerator
 import java.security.SecureRandom
 import java.security.interfaces.ECPrivateKey
 import java.security.interfaces.ECPublicKey
-import java.security.spec.ECGenParameterSpec
 import java.time.Instant
 import kotlin.getValue
 
@@ -83,44 +81,6 @@ class CreatePasskeyActivity : FragmentActivity() {
             setUpFailureResponseAndFinish("Unable to extract request from intent")
             return
         }
-
-        // TODO: see what UX options we have to trigger the service, it may be ideal to just use the deeplink
-        val startIntent = Intent(this, SignalService::class.java)
-        startService(startIntent)
-        bindService(startIntent, object : ServiceConnection {
-            override fun onServiceDisconnected(name: ComponentName) {
-                signalService = null
-            }
-
-            override fun onServiceConnected(name: ComponentName, service: IBinder) {
-                val mLocalBinder = service as SignalService.LocalBinder
-                signalService = mLocalBinder.getServerInstance()
-
-                if(request.callingRequest is CreatePublicKeyCredentialRequest){
-                    val publicKeyRequest: CreatePublicKeyCredentialRequest =
-                        request.callingRequest as CreatePublicKeyCredentialRequest
-                    val accountId = intent.getStringExtra(KEY_ACCOUNT_ID)
-
-                    var httpClient = OkHttpClient.Builder()
-                        .cookieJar(cookieJar)
-                        .build()
-                    val notification =  NotificationBuilder(this@CreatePasskeyActivity, "notification_channel")
-                        .setContentTitle("My Application")
-                        .setContentText("Connect")
-                    signalService!!.start(
-                        publicKeyRequest.origin!!,
-                        httpClient,
-                        notifications.createNotificationBuilder(this@CreatePasskeyActivity),
-                        NotificationViewModel.SERVICE_NOTIFICATION_ID,
-                        CreatePasskeyActivity::class.java
-                    )
-                    var data = JSONObject(publicKeyRequest.requestJson)
-                    lifecycleScope.launch {
-                        var dc = signalService!!.peer(data.get("challenge") as String, "offer", iceServers)
-                    }
-                }
-            }
-        }, BIND_AUTO_CREATE)
 
         handleCreatePublicKeyCredentialRequest(request)
     }

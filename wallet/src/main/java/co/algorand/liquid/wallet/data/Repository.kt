@@ -1,12 +1,25 @@
 package co.algorand.liquid.wallet.data
 
 import android.content.Context
+import co.algorand.liquid.wallet.R
 import co.algorand.liquid.wallet.crypto.MnemonicManager
 import co.algorand.liquid.wallet.data.model.Passkey
 import co.algorand.liquid.wallet.data.model.PasskeyMetadata
 import co.algorand.liquid.wallet.data.model.Site
 import co.algorand.liquid.wallet.data.query.SiteWithPasskeys
+import co.algorand.liquid.wallet.encoding.b64Decode
 import kotlinx.coroutines.flow.Flow
+import java.math.BigInteger
+import java.security.AlgorithmParameters
+import java.security.KeyFactory
+import java.security.KeyPair
+import java.security.spec.ECGenParameterSpec
+import java.security.spec.ECParameterSpec
+import java.security.spec.ECPrivateKeySpec
+import java.security.spec.PKCS8EncodedKeySpec
+import java.security.spec.X509EncodedKeySpec
+import kotlin.io.encoding.Base64
+import kotlin.io.encoding.ExperimentalEncodingApi
 
 
 class KeysRepository(
@@ -41,6 +54,24 @@ class KeysRepository(
         return credentialDao.deleteSite(entity)
     }
 
+    fun decodePasskey(passkey: Passkey): KeyPair {
+        val publicKeyBytes = b64Decode(passkey.publicKey)
+        val privateKeyBytes = b64Decode(passkey.privateKey)
+        val params = AlgorithmParameters.getInstance(applicationContext.getString(R.string.ec))
+        params.init(ECGenParameterSpec(applicationContext.getString(R.string.secp_256_r1)))
+        val spec = params.getParameterSpec(ECParameterSpec::class.java)
+
+        // Convert the private key bytes to a BigInteger.
+        val bi = BigInteger(1, privateKeyBytes)
+        // Create an EC private key specification from the BigInteger and the EC parameter specification.
+        val privateKeySpec = ECPrivateKeySpec(bi, spec)
+
+        val factory = KeyFactory.getInstance("EC")
+
+        val publicKey = factory.generatePublic(X509EncodedKeySpec(publicKeyBytes))
+        val privateKey = factory.generatePrivate(privateKeySpec)
+        return KeyPair(publicKey, privateKey)
+    }
 
     // Passkey Mutations
     suspend fun updatePasskey(passkey: Passkey) {

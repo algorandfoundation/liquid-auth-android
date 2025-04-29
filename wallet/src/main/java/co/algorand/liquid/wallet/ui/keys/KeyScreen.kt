@@ -185,6 +185,39 @@ fun RecoverPasskeyDialog(
 }
 
 @Composable
+fun ImportPasskey(
+    onConfirmDelete: ()-> Unit = {},
+    onCancelDelete: ()-> Unit = {},
+){
+    AlertDialog(
+        icon = {
+            Icon(Icons.Filled.Warning, contentDescription = "Warning Icon")
+        },
+        title = {
+            Text(text = "Dangerously Delete")
+        },
+        text = {
+            Text(text = "This will destroy all keys on this device. Make sure you have backed up the phrase in a safe place")
+        },
+        onDismissRequest = onCancelDelete,
+        confirmButton = {
+            TextButton(
+                onClick = onConfirmDelete
+            ) {
+                Text("Confirm")
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onCancelDelete
+            ) {
+                Text("Dismiss")
+            }
+        }
+    )
+}
+
+@Composable
 fun ConfirmDeleteDialog(
     onConfirmDelete: ()-> Unit = {},
     onCancelDelete: ()-> Unit = {},

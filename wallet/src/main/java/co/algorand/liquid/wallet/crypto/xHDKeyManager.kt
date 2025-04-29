@@ -32,16 +32,11 @@ class HDKeyManager {
     }
 
     fun generatePasskey(origin: String, userHandle: String): KeyPair {
-        return xPasskey.genDomainSpecificKeypair(rootPasskey!!, origin, userHandle)
+        return xPasskey.genDomainSpecificKeypair(rootPasskey!!, origin, userHandle.lowercase())
     }
 
-
-    fun signPasskey(origin: String, userHandle: String, payload: ByteArray): ByteArray {
+    fun signPasskey(keyPair: KeyPair, origin: String, userHandle: String, payload: ByteArray): ByteArray {
         Log.d(TAG, "signPasskey(${origin}, ${userHandle})")
-        if(rootPasskey === null){
-            throw Exception(EXCEPTION_KEY_NOT_FOUND)
-        }
-        val keyPair = xPasskey.genDomainSpecificKeypair(rootPasskey!!, origin, userHandle)
         return xPasskey.signWithDomainSpecificKeyPair(keyPair, payload)
     }
     fun signTxn(txn: ByteArray): ByteArray? {

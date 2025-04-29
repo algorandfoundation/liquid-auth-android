@@ -10,7 +10,11 @@ plugins {
 android {
     namespace = "co.algorand.liquid.wallet"
     compileSdk = 35
-
+    configurations {
+        all {
+            exclude("org.bouncycastle", "bcprov-jdk15to18")
+        }
+    }
     defaultConfig {
         applicationId = "co.algorand.liquid.wallet"
         minSdk = 35
@@ -51,6 +55,7 @@ dependencies {
     implementation("net.java.dev.jna:jna:5.14.0@aar")
     implementation(libs.xhdwalletapi.android)
     implementation(libs.kotlin.bip39)
+    implementation("org.bouncycastle:bcprov-jdk15on:1.61")
     // Liquid Auth
     implementation(project(mapOf("path" to ":liquid")))
     // HTTP/Webrtc

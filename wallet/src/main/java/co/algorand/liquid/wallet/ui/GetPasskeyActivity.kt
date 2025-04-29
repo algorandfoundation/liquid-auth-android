@@ -39,25 +39,29 @@ import co.algorand.liquid.wallet.AppDependencies
 import co.algorand.liquid.wallet.BiometricErrorUtils
 import co.algorand.liquid.wallet.R
 import co.algorand.liquid.wallet.data.model.Passkey
+import co.algorand.liquid.wallet.encoding.appInfoToOrigin
+import co.algorand.liquid.wallet.encoding.b64Decode
 import co.algorand.liquid.wallet.fido.AssetLinkVerifier
 import co.algorand.liquid.wallet.fido.AuthenticatorAssertionResponse
 import co.algorand.liquid.wallet.fido.FidoPublicKeyCredential
 import co.algorand.liquid.wallet.fido.PublicKeyCredentialRequestOptions
-import co.algorand.liquid.wallet.encoding.appInfoToOrigin
-import co.algorand.liquid.wallet.encoding.b64Decode
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
+import org.bouncycastle.jce.provider.BouncyCastleProvider
 import java.math.BigInteger
 import java.net.URL
 import java.security.AlgorithmParameters
 import java.security.KeyFactory
+import java.security.KeyPair
+import java.security.Security
 import java.security.Signature
 import java.security.interfaces.ECPrivateKey
 import java.security.spec.ECGenParameterSpec
 import java.security.spec.ECParameterSpec
 import java.security.spec.ECPrivateKeySpec
+
 
 /*
 * This class is responsible for handling the public key credential (Passkey) get request from a Relying Party i.e calling app
@@ -67,7 +71,8 @@ class GetPasskeyActivity : FragmentActivity() {
     private val credentialRepository = AppDependencies.keysRepository
 
     public override fun onCreate(savedInstanceState: Bundle?) {
-        Log.d(TAG, "YOOOOOOOOO HOMMIE WE ARE GEETTING A PASKEY")
+        Security.removeProvider("BC")
+        Security.insertProviderAt(BouncyCastleProvider(), 0)
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         handleGetPasskeyIntent()
@@ -172,6 +177,7 @@ class GetPasskeyActivity : FragmentActivity() {
         val credentialID = b64Decode(credentialIdEncoded)
         val privateKey = b64Decode(passkey.privateKey)
         val uid = b64Decode(passkey.userId)
+        val userHandle = passkey.userHandle.lowercase()
 
         // Determine the calling application's origin and validate it.
         var callingAppOriginInfo: String? = null
@@ -192,7 +198,7 @@ class GetPasskeyActivity : FragmentActivity() {
         val packageName = request.callingAppInfo.packageName
 
         // Convert the decoded private key to an ECPrivateKey.
-        val convertedPrivateKey = convertPrivateKey(privateKey)
+        val key = credentialRepository.decodePasskey(passkey)
 
         // Extract the client data hash if the calling application's origin is available.
         var clientDataHash: ByteArray? = null
@@ -209,9 +215,10 @@ class GetPasskeyActivity : FragmentActivity() {
                 callingAppOriginInfo,
                 publicKeyRequestOptions,
                 uid,
+                userHandle,
                 packageName,
                 clientDataHash,
-                convertedPrivateKey,
+                key,
                 credentialID,
             )
         } else {
@@ -222,8 +229,9 @@ class GetPasskeyActivity : FragmentActivity() {
                 callingAppOriginInfo,
                 publicKeyRequestOptions,
                 uid,
+                userHandle,
                 clientDataHash,
-                convertedPrivateKey,
+                key,
                 credentialID,
             )
         }
@@ -381,8 +389,9 @@ class GetPasskeyActivity : FragmentActivity() {
         callingAppInfo: String?,
         publicKeyRequestOptions: PublicKeyCredentialRequestOptions,
         uid: ByteArray,
+        userHandle: String,
         clientDataHash: ByteArray?,
-        convertedPrivateKey: ECPrivateKey,
+        key: KeyPair,
         credId: ByteArray,
     ) {
         // Configure the BiometricPrompt with the provided parameters.
@@ -392,9 +401,10 @@ class GetPasskeyActivity : FragmentActivity() {
             callingAppInfo,
             publicKeyRequestOptions,
             uid,
+            userHandle,
             packageName,
             clientDataHash,
-            convertedPrivateKey,
+            key,
             credId,
         )
         // Initiate the authentication process using the configured BiometricPrompt.
@@ -422,9 +432,10 @@ class GetPasskeyActivity : FragmentActivity() {
         callingAppInfoOrigin: String?,
         request: PublicKeyCredentialRequestOptions,
         uid: ByteArray,
+        userHandle: String,
         packageName: String,
         clientDataHash: ByteArray?,
-        convertedPrivateKey: ECPrivateKey,
+        key: KeyPair,
         credId: ByteArray,
     ): BiometricPrompt {
         val biometricPrompt = BiometricPrompt(
@@ -457,9 +468,10 @@ class GetPasskeyActivity : FragmentActivity() {
                         callingAppInfoOrigin,
                         request,
                         uid,
+                        userHandle,
                         packageName,
                         clientDataHash,
-                        convertedPrivateKey,
+                        key,
                         credId,
                     )
                 }
@@ -468,33 +480,16 @@ class GetPasskeyActivity : FragmentActivity() {
         return biometricPrompt
     }
 
-    /**
-     * Asserts the passkey using the biometric flow.
-     *
-     * <p>This method is called when the biometric authentication flow is successful.
-     * It updates the passkey's last used time in the data source and then
-     * configures the credential response to be sent back to the calling application.
-     *
-     * @param passkey               The {@link PasskeyItem} containing the passkey details.
-     * @param origin                The origin of the calling application.
-     * @param callingAppInfoOrigin  The origin information of the calling application, if available.
-     * @param request               The {@link PublicKeyCredentialRequestOptions} containing the
-     *                              request details.
-     * @param uid                   The unique identifier associated with the passkey.
-     * @param packageName           The package name of the calling application.
-     * @param clientDataHash        The client data hash, if available.
-     * @param convertedPrivateKey   The converted private key for the passkey.
-     * @param credId                The credential ID of the passkey.
-     */
     private fun assertPasskeyWithBiometricFlow(
         passkey: Passkey,
         origin: String,
         callingAppInfoOrigin: String?,
         request: PublicKeyCredentialRequestOptions,
         uid: ByteArray,
+        userHandle: String,
         packageName: String,
         clientDataHash: ByteArray?,
-        convertedPrivateKey: ECPrivateKey,
+        key: KeyPair,
         credId: ByteArray,
     ) {
         // Update the passkey's last used time in the data source.
@@ -511,9 +506,10 @@ class GetPasskeyActivity : FragmentActivity() {
             request,
             origin = callingOrigin,
             uid,
+            userHandle,
             packageName,
             clientDataHash,
-            convertedPrivateKey,
+            key,
             credId,
         )
     }
@@ -553,9 +549,10 @@ class GetPasskeyActivity : FragmentActivity() {
         request: PublicKeyCredentialRequestOptions,
         origin: String,
         uid: ByteArray,
+        userHandle: String,
         packageName: String,
         clientDataHash: ByteArray?,
-        privateKey: ECPrivateKey,
+        key: KeyPair,
         credId: ByteArray,
     ) {
         val response = AuthenticatorAssertionResponse(
@@ -570,10 +567,7 @@ class GetPasskeyActivity : FragmentActivity() {
             clientDataHash,
         )
 
-        val signature = Signature.getInstance(getString(R.string.sha256_with_ecdsa))
-        signature.initSign(privateKey)
-        signature.update(response.dataToSign())
-        response.signature = signature.sign()
+        response.signature = AppDependencies.xHDKeyManager.signPasskey(key, origin, userHandle, response.dataToSign())
 
         val credential = FidoPublicKeyCredential(
             rawId = credId,
@@ -598,27 +592,6 @@ class GetPasskeyActivity : FragmentActivity() {
         }
     }
 
-    /**
-     * Encrypts the private key. This is used for demonstration purposes.
-     *
-     * @param privateKeyBytes The private key bytes to encrypt.
-     * @return The encrypted private key.
-     */
-    private fun convertPrivateKey(privateKeyBytes: ByteArray): ECPrivateKey {
-        val params = AlgorithmParameters.getInstance(getString(R.string.ec))
-        params.init(ECGenParameterSpec(getString(R.string.secp_256_r1)))
-        val spec = params.getParameterSpec(ECParameterSpec::class.java)
-
-        // Convert the private key bytes to a BigInteger.
-        val bi = BigInteger(1, privateKeyBytes)
-        // Create an EC private key specification from the BigInteger and the EC parameter specification.
-        val privateKeySpec = ECPrivateKeySpec(bi, spec)
-
-        val keyFactory = KeyFactory.getInstance(getString(R.string.ec))
-
-        // Generate the encrypted private key using the KeyFactory.
-        return keyFactory.generatePrivate(privateKeySpec) as ECPrivateKey
-    }
 
     companion object {
         // This is to check if the origin was populated.
