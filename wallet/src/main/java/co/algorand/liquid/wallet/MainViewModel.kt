@@ -6,6 +6,10 @@ import android.os.Build
 import android.util.Log
 import androidx.credentials.CreatePublicKeyCredentialRequest
 import androidx.credentials.CreatePublicKeyCredentialResponse
+import androidx.credentials.GetCredentialRequest
+import androidx.credentials.GetPublicKeyCredentialOption
+import androidx.credentials.PublicKeyCredential
+import androidx.credentials.exceptions.GetCredentialException
 import androidx.credentials.exceptions.NoCredentialException
 import androidx.lifecycle.ViewModel
 import co.algorand.liquid.wallet.encoding.b64Decode
@@ -45,14 +49,40 @@ class MainViewModel(notificationViewModel: NotificationViewModel): ViewModel() {
         if(address === null){
             throw Exception("No account assigned")
         }
-        // TODO: look for existing credentials
-        val hasCredential = false
 
         val msg = AuthMessage.fromUri(uri)
 
-        authenticate(context, msg)
+        //val passkeysForSite = keysRepository.credentialsForSite(msg.origin)
+
+        //if(passkeysForSite!!.passkeys.isNotEmpty()){
+        // authenticate(context, msg, passkeysForSite.passkeys[0].credentialId)
+        //} else {
+        register(context, msg)
+        //}
     }
-    suspend fun authenticate(context: Context, msg: AuthMessage){
+    fun getExtension(msg: AuthMessage, address: String, signature: ByteArray): JSONObject{
+        // Add Liquid Extension
+        val liquidExtJSON = JSONObject()
+        liquidExtJSON.put("type", "algorand")
+        liquidExtJSON.put("address", address.toString())
+        liquidExtJSON.put("signature", b64Encode(signature))
+        // Optional Arguments
+        liquidExtJSON.put("requestId", msg.requestId)
+        liquidExtJSON.put("device", Build.MODEL)
+        return liquidExtJSON
+    }
+    fun getOptions(address: String): JSONObject{
+        // Create the Liquid Extension
+        val options = JSONObject()
+        options.put("username", address)
+        options.put("displayName", "Liquid Auth User")
+        options.put("authenticatorSelection", JSONObject().put("userVerification", "required"))
+        val extensions = JSONObject()
+        extensions.put("liquid", true)
+        options.put("extensions", extensions)
+        return options
+    }
+    suspend fun register(context: Context, msg: AuthMessage){
         Log.d(TAG, "Connecting to ${msg.origin}")
 
         val signalService = AppDependencies.signalService
@@ -68,13 +98,7 @@ class MainViewModel(notificationViewModel: NotificationViewModel): ViewModel() {
         //   val address = xHDKeyManager.getAddress()
         val address = testAccount!!.address.toString()
         // Create the Liquid Extension
-        val options = JSONObject()
-        options.put("username", address.toString())
-        options.put("displayName", "Liquid Auth User")
-        options.put("authenticatorSelection", JSONObject().put("userVerification", "required"))
-        val extensions = JSONObject()
-        extensions.put("liquid", true)
-        options.put("extensions", extensions)
+        val options = getOptions(address)
 
         val response = attestationApi.postAttestationOptions(msg.origin, userAgent, options).await()
         val requestJson = response.body!!.string()
@@ -137,9 +161,72 @@ class MainViewModel(notificationViewModel: NotificationViewModel): ViewModel() {
         }
     }
 
-    fun register(msg: AuthMessage, signalService: SignalService){
+    suspend fun authenticate(context: Context, msg: AuthMessage, credId: String){
         Log.d(TAG, "Connecting to ${msg.origin}")
-        TODO()
+
+        val signalService = AppDependencies.signalService
+        signalService.start(
+            msg.origin,
+            AppDependencies.httpClient,
+            notifications.createNotificationBuilder(context),
+            NotificationViewModel.SERVICE_NOTIFICATION_ID,
+            MainActivity::class.java,
+        )
+
+        // TODO: signature validation for account
+        //   val address = xHDKeyManager.getAddress()
+        val address = testAccount!!.address.toString()
+
+        val response = assertionApi.postAssertionOptions(msg.origin, userAgent, credId).await()
+        val requestJson = response.body!!.string()
+
+        val challenge = JSONObject(requestJson).getString("challenge")
+
+
+
+        val getPublicKeyCredentialOption = GetPublicKeyCredentialOption(
+            requestJson = requestJson
+        )
+        val getCredRequest = GetCredentialRequest(
+            listOf(getPublicKeyCredentialOption)
+        )
+        try {
+            val result = credentialManager.getCredential(
+                // Use an activity-based context to avoid undefined system UI
+                // launching behavior.
+                context = context,
+                request = getCredRequest
+            )
+
+            val challengeBytes = b64Decode(challenge)
+            if(hasAlgorandTags(challengeBytes)){
+                throw Exception("Attempted to sign a message with an Algorand prefix")
+            }
+            val keyPair = KeyPairs.getKeyPair(testAccount!!.toMnemonic())
+            val signature = KeyPairs.rawSignBytes(challengeBytes, keyPair.private)
+            val extension = getExtension(msg, address, signature!!)
+            val credential = result.credential
+            if(credential is PublicKeyCredential){
+                val submit = assertionApi.postAssertionResult(msg.origin, userAgent, credential.authenticationResponseJson, extension).await()
+                Log.d(TAG, submit.body!!.string())
+
+                // Optionally, connect to a peer
+                if(AppDependencies.mBounded){
+                    val iceServers = AppDependencies.iceServers
+                    signalService.peer(msg.requestId, "answer", iceServers)
+                } else {
+                    throw Exception("Invalid peer client")
+                }
+
+            } else {
+                throw Exception("Unsupported Credential")
+            }
+
+
+        } catch (e: GetCredentialException){
+            Log.e(TAG, e.message ?: "Something went wrong")
+        }
+
     }
 
     // TODO: Remove in favor of HD validation

@@ -36,7 +36,28 @@ class AssertionApi @Inject constructor(
             requestBuilder.build()
         )
     }
+    fun postAssertionResult(
+        origin: String,
+        userAgent: String,
+        credential: String,
+        liquidExt: JSONObject?
+    ): Call {
+        val payload = JSONObject(credential)
 
+        if(liquidExt != null) {
+            val clientExtensionResults = JSONObject()
+            clientExtensionResults.put("liquid", liquidExt)
+            payload.put("clientExtensionResults", clientExtensionResults)
+        }
+        val builder = Request.Builder()
+            .url("$origin/assertion/response")
+            .addHeader("User-Agent", userAgent)
+            .method("POST", payload.toString().toRequestBody("application/json".toMediaTypeOrNull()))
+
+        return client.newCall(
+            builder.build()
+        )
+    }
     /**
      */
     fun postAssertionResult(
@@ -64,13 +85,7 @@ class AssertionApi @Inject constructor(
         jsonResponse.put("userHandle", response.userHandle?.toBase64())
 
         payload.put("response", jsonResponse)
-        val builder = Request.Builder()
-            .url("$origin/assertion/response")
-            .addHeader("User-Agent", userAgent)
-            .method("POST", payload.toString().toRequestBody("application/json".toMediaTypeOrNull()))
 
-       return client.newCall(
-            builder.build()
-        )
+        return postAssertionResult(origin, userAgent, payload.toString(), liquidExt)
     }
 }
