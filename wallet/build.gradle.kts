@@ -26,7 +26,14 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
-
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("../debug.jks")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
     buildTypes {
         release {
             isMinifyEnabled = false
@@ -52,17 +59,25 @@ android {
 dependencies {
     // Algorand Foundation Integration
     implementation(files("libs/dP256.jar"))
+    implementation(files("libs/provider-debug.aar"))
+    implementation(files("libs/crypto-debug.aar"))
     implementation("net.java.dev.jna:jna:5.14.0@aar")
+    implementation(libs.java.uuid.generator)
     implementation(libs.xhdwalletapi.android)
     implementation(libs.kotlin.bip39)
     implementation("org.bouncycastle:bcprov-jdk15on:1.61")
+    implementation(libs.algosdk)
+
     // Liquid Auth
     implementation(project(mapOf("path" to ":liquid")))
     // HTTP/Webrtc
     implementation(libs.okhttp)
+    implementation(libs.kotlin.coroutines.okhttp)
     implementation(libs.stream.webrtc.android)
 
     // Credentials and Scanner
+    implementation("androidx.credentials:credentials:1.5.0")
+    implementation(libs.androidx.credentials.play.services.auth)
     implementation(libs.androidx.credential.manager)
     implementation(libs.play.services.code.scanner)
     implementation(libs.androidx.biometrics)

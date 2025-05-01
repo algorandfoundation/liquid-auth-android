@@ -67,6 +67,7 @@ fun KeyScreen(
         onGenerate = keyViewModel::onGenerate,
         onRecoverPasskey = keyViewModel::onRecoverPasskey,
         onCancelRecovery = keyViewModel::onCancelRecovery,
+        onShowRecovery = keyViewModel::onShowRecovery,
         onSave = {
             keyViewModel.onSave()
             navController.navigate("credentials")
@@ -87,6 +88,7 @@ fun KeyScreen(
     onCancelDelete: () -> Unit = {},
     onConfirmDelete: () -> Unit = {},
     onCancelRecovery: () -> Unit = {},
+    onShowRecovery: () -> Unit = {},
     onSave: (mnemonic: String) -> Unit = {},
     onGenerate: () -> Unit = {},
     onNavigate: (path: String) -> Unit = {},
@@ -99,6 +101,7 @@ fun KeyScreen(
     }
     if(uiState.showRecovery){
         RecoverPasskeyDialog(
+            isError=isError,
             onCancelRecovery =onCancelRecovery,
             onRecoverPasskey = onRecoverPasskey,
         )
@@ -114,6 +117,7 @@ fun KeyScreen(
             BottomAppBar(
                 uiState=uiState,
                 isError=isError,
+                onShowRecoverPasskey = onShowRecovery,
                 onGenerate = onGenerate,
                 onSave = onSave,
                 onUndo = onUndo,
@@ -134,6 +138,7 @@ fun KeyScreen(
 
 @Composable
 fun RecoverPasskeyDialog(
+    isError: Boolean,
     onRecoverPasskey: (origin: String, userHandle: String) -> Unit,
     onCancelRecovery: ()-> Unit = {}
 ){
@@ -159,6 +164,28 @@ fun RecoverPasskeyDialog(
                     text = "This is a dialog with buttons and an image.",
                     modifier = Modifier.padding(16.dp),
                 )
+                TextField(
+                    isError = isError,
+                    label = { Text("Origin Service") },
+                    value= origin,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(Dimensions.padding_medium),
+                    onValueChange = {
+                        origin = it
+                    }
+                )
+                TextField(
+                    isError = isError,
+                    label = { Text("User Handle") },
+                    value= userHandle,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(Dimensions.padding_medium),
+                    onValueChange = {
+                        userHandle = it
+                    }
+                )
                 Row(
                     modifier = Modifier
                         .fillMaxWidth(),
@@ -182,39 +209,6 @@ fun RecoverPasskeyDialog(
             }
         }
     }
-}
-
-@Composable
-fun ImportPasskey(
-    onConfirmDelete: ()-> Unit = {},
-    onCancelDelete: ()-> Unit = {},
-){
-    AlertDialog(
-        icon = {
-            Icon(Icons.Filled.Warning, contentDescription = "Warning Icon")
-        },
-        title = {
-            Text(text = "Dangerously Delete")
-        },
-        text = {
-            Text(text = "This will destroy all keys on this device. Make sure you have backed up the phrase in a safe place")
-        },
-        onDismissRequest = onCancelDelete,
-        confirmButton = {
-            TextButton(
-                onClick = onConfirmDelete
-            ) {
-                Text("Confirm")
-            }
-        },
-        dismissButton = {
-            TextButton(
-                onClick = onCancelDelete
-            ) {
-                Text("Dismiss")
-            }
-        }
-    )
 }
 
 @Composable
@@ -283,18 +277,12 @@ fun KeyEditor(
 
     val inlineContent = instructions.mapValues { entry ->
         InlineTextContent(
-            // Placeholder tells text layout the expected size and vertical alignment of
-            // children composable.
             Placeholder(
                 width = 20.sp,
                 height = 20.sp,
                 placeholderVerticalAlign = PlaceholderVerticalAlign.Center
             )
         ) {
-            // This Icon will fill maximum size, which is specified by the [Placeholder]
-            // above. Notice the width and height in [Placeholder] are specified in TextUnit,
-            // and are converted into pixel by text layout.
-
             Icon(entry.component2().icon,"",tint = Color.Green,  modifier = Modifier.fillMaxSize())
         }
     }
@@ -380,7 +368,7 @@ fun BottomAppBar(
     onDelete: () -> Unit = {},
     onSave: (String) -> Unit = {},
     onUndo: ()-> Unit = {},
-    onRecoverPasskey: () -> Unit = {},
+    onShowRecoverPasskey: () -> Unit,
 ){
     BottomAppBar(
         floatingActionButton = {
@@ -416,7 +404,7 @@ fun BottomAppBar(
                 }
                 if(!uiState.isDirty){
                     IconButton(
-                        onClick = onRecoverPasskey
+                        onClick = onShowRecoverPasskey
                     ) {
                         Icon(
                             imageVector = Medical,

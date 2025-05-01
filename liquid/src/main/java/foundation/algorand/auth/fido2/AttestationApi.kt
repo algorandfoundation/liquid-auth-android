@@ -1,5 +1,6 @@
 package foundation.algorand.auth.fido2
 
+import android.util.Log
 import com.google.android.gms.fido.fido2.api.common.AuthenticatorAttestationResponse
 import com.google.android.gms.fido.fido2.api.common.PublicKeyCredential
 import com.google.android.gms.fido.fido2.api.common.PublicKeyCredentialType
@@ -56,7 +57,30 @@ class AttestationApi @Inject constructor(
                 .build()
         )
     }
-
+    fun postAttestationResult(
+        origin: String,
+        userAgent: String,
+        credential: String,
+        liquidExt: JSONObject? = null
+    ): Call {
+        val path = "$origin/attestation/response"
+        val payload = JSONObject(credential)
+        if(liquidExt != null) {
+            val clientExtensionResults = JSONObject()
+            clientExtensionResults.put("liquid", liquidExt)
+            payload.put("clientExtensionResults", clientExtensionResults)
+        }
+        payload.put("device", android.os.Build.MODEL)
+        Log.d(TAG, "Submitting: $payload")
+        val requestBody = payload.toString().toRequestBody("application/json".toMediaTypeOrNull())
+        return client.newCall(
+            Request.Builder()
+                .url(path)
+                .addHeader("User-Agent", userAgent)
+                .method("POST", requestBody)
+                .build()
+        )
+    }
     /**
      * POST request to register a PublicKeyCredential
      *
@@ -71,7 +95,6 @@ class AttestationApi @Inject constructor(
         credential: PublicKeyCredential,
         liquidExt: JSONObject? = null
     ): Call {
-        val path = "$origin/attestation/response"
         val rawId = credential.rawId!!.toBase64()
         val response = credential.response as AuthenticatorAttestationResponse
 
@@ -79,24 +102,16 @@ class AttestationApi @Inject constructor(
         payload.put("id", rawId)
         payload.put("type", "${PublicKeyCredentialType.PUBLIC_KEY}")
         payload.put("rawId", rawId)
-        if(liquidExt != null) {
-            val clientExtensionResults = JSONObject()
-            clientExtensionResults.put("liquid", liquidExt)
-            payload.put("clientExtensionResults", clientExtensionResults)
-        }
+
         val jsonResponse = JSONObject()
         jsonResponse.put("clientDataJSON", response.clientDataJSON.toBase64())
         jsonResponse.put("attestationObject", response.attestationObject.toBase64())
         payload.put("response", jsonResponse)
 
-        payload.put("device", android.os.Build.MODEL)
-        val requestBody = payload.toString().toRequestBody("application/json".toMediaTypeOrNull())
-        return client.newCall(
-            Request.Builder()
-                .url(path)
-                .addHeader("User-Agent", userAgent)
-                .method("POST", requestBody)
-                .build()
-        )
+        return postAttestationResult(origin, userAgent, payload.toString(), liquidExt)
+    }
+
+    companion object {
+        const val TAG = "AttestationApi"
     }
 }

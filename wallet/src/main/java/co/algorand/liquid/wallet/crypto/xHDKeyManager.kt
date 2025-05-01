@@ -6,7 +6,9 @@ import cash.z.ecc.android.bip39.toSeed
 import foundation.algorand.deterministicP256.DeterministicP256
 import foundation.algorand.xhdwalletapi.KeyContext
 import foundation.algorand.xhdwalletapi.XHDWalletAPIAndroid
+import foundation.algorand.xhdwalletapi.encodeAddress
 import java.security.KeyPair
+import java.security.MessageDigest
 
 const val EXCEPTION_KEY_NOT_FOUND = "Root key was not found"
 const val EXCEPTION_KEY_EXISTS = "Root keys already exist"
@@ -19,6 +21,22 @@ class HDKeyManager {
     private var spendKey: ByteArray? = null
     // Deterministic P-256 Passkeys
     private var rootPasskey: ByteArray? = null
+
+    fun getAddress(): String? {
+        if(spendKey === null) return null
+        return encodeAddress(spendKey!!)
+    }
+
+    fun generateCredentialId(keyPair: KeyPair): ByteArray {
+        // Get the public key bytes
+        val publicKeyBytes = keyPair.public.encoded
+
+        // Compute SHA-256 hash of the public key
+        val messageDigest = MessageDigest.getInstance("SHA-256")
+        val credentialId = messageDigest.digest(publicKeyBytes)
+
+        return credentialId
+    }
 
     fun setRootKey(seed: Mnemonics.MnemonicCode){
         Log.d(TAG, "setRootKey(${seed.joinToString(" ")})")
@@ -33,6 +51,16 @@ class HDKeyManager {
 
     fun generatePasskey(origin: String, userHandle: String): KeyPair {
         return xPasskey.genDomainSpecificKeypair(rootPasskey!!, origin, userHandle.lowercase())
+    }
+
+    fun rawSign(bytes: ByteArray): ByteArray? {
+        return xHD?.rawSign(listOf(
+            0u,
+            0u,
+            0u,
+            ),
+            bytes
+        )
     }
 
     fun signPasskey(keyPair: KeyPair, origin: String, userHandle: String, payload: ByteArray): ByteArray {

@@ -5,14 +5,19 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cash.z.ecc.android.bip39.Mnemonics
 import cash.z.ecc.android.bip39.Mnemonics.MnemonicCode
+import co.algorand.liquid.wallet.AppDependencies
 import co.algorand.liquid.wallet.crypto.MnemonicManager
 import co.algorand.liquid.wallet.data.KeysRepository
 import co.algorand.liquid.wallet.data.model.Passkey
+import co.algorand.liquid.wallet.data.model.PasskeyMetadata
+import co.algorand.liquid.wallet.encoding.b64Encode
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import java.security.interfaces.ECPrivateKey
+import java.security.interfaces.ECPublicKey
 
 
 const val EXCEPTION_EMPTY_MNEMONIC = "Please specify a mnemonic phrase"
@@ -86,13 +91,28 @@ class KeyViewModel(
 
     fun onRecoverPasskey(origin: String, userHandle: String){
         Log.d(TAG, "onRecoverPasskey(${origin}, ${userHandle})")
-        _uiState.value = _uiState.value.copy(showRecovery = true)
+        runBlocking {
+            val keyPair = AppDependencies.xHDKeyManager.generatePasskey(origin, userHandle.lowercase())
+            keysRepository.addNewPasskey(
+                PasskeyMetadata(
+                    uid = "",
+                    rpid = origin,
+                    username = userHandle,
+                    displayName = userHandle,
+                    credId = b64Encode(AppDependencies.xHDKeyManager.generateCredentialId(keyPair)),
+                    credPublicKey = b64Encode((keyPair.public as ECPublicKey).encoded),
+                    credPrivateKey = b64Encode((keyPair.private as ECPrivateKey).s.toByteArray()),
+                ),
+            )
+        }
+
     }
     fun onCancelRecovery(){
         _uiState.value = _uiState.value.copy(showRecovery = false)
     }
-
-
+    fun onShowRecovery(){
+        _uiState.value = _uiState.value.copy(showRecovery = true)
+    }
 
     init {
 //        viewModelScope.launch {
