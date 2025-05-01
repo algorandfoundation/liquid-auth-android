@@ -14,16 +14,14 @@ import com.algorand.algosdk.account.Account
 import foundation.algorand.auth.connect.AuthMessage
 import foundation.algorand.auth.connect.SignalService
 import foundation.algorand.crypto.avm.KeyPairs
-import kotlinx.coroutines.runBlocking
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.json.JSONObject
 import ru.gildor.coroutines.okhttp.await
 import java.security.Security
 
-class MainViewModel(): ViewModel() {
+class MainViewModel(notificationViewModel: NotificationViewModel): ViewModel() {
     private var testAccount: Account? = null
-
-    private val notifications = NotificationViewModel()
+    private val notifications = notificationViewModel
     private val xHDKeyManager = AppDependencies.xHDKeyManager
     private val keysRepository = AppDependencies.keysRepository
     private val attestationApi = AppDependencies.attestationApi
@@ -67,7 +65,7 @@ class MainViewModel(): ViewModel() {
         )
 
         // TODO: signature validation for account
-//        val address = xHDKeyManager.getAddress()
+        //   val address = xHDKeyManager.getAddress()
         val address = testAccount!!.address.toString()
         // Create the Liquid Extension
         val options = JSONObject()
@@ -95,19 +93,36 @@ class MainViewModel(): ViewModel() {
                 request = createPublicKeyCredentialRequest
             )
             if(result is CreatePublicKeyCredentialResponse){
-//                val additionalSignature = xHDKeyManager.rawSign(b64Decode(challenge))
+                val challengeBytes = b64Decode(challenge)
+                if(hasAlgorandTags(challengeBytes)){
+                    throw Exception("Attempted to sign a message with an Algorand prefix")
+                }
+                // Note: This signature may change before the 1.0.0 release
+                // val additionalSignature = xHDKeyManager.rawSign(challengeBytes)
+
+                // TODO: Signature issue with HD key
                 val keyPair = KeyPairs.getKeyPair(testAccount!!.toMnemonic())
-                val additionalSignature = KeyPairs.rawSignBytes(b64Decode(challenge), keyPair.private)
+                val additionalSignature = KeyPairs.rawSignBytes(challengeBytes, keyPair.private)
+
+                // Handle Authenticator Response
                 val authenticatorJson = result.registrationResponseJson
-                Log.d(TAG, "Received Attestation Authenticator Response: ${authenticatorJson}")
+                Log.d(TAG, "Received Attestation Authenticator Response: $authenticatorJson")
+
+                // Add Liquid Extension
                 val liquidExtJSON = JSONObject()
                 liquidExtJSON.put("type", "algorand")
-                liquidExtJSON.put("requestId", msg.requestId)
                 liquidExtJSON.put("address", address.toString())
                 liquidExtJSON.put("signature", b64Encode(additionalSignature!!))
+                // Optional Arguments
+                liquidExtJSON.put("requestId", msg.requestId)
                 liquidExtJSON.put("device", Build.MODEL)
+
+                // Submit result to the Liquid Service
                 val submit = attestationApi.postAttestationResult(msg.origin, userAgent, result.registrationResponseJson, liquidExtJSON).await()
+
                 Log.d(TAG, "Received Attestation Service Response: ${submit.body!!.string()}")
+
+                // Optionally, connect to a peer
                 if(AppDependencies.mBounded){
                     val iceServers = AppDependencies.iceServers
                     signalService.peer(msg.requestId, "answer", iceServers)
@@ -121,12 +136,64 @@ class MainViewModel(): ViewModel() {
             Log.e("CredentialManager", "No credential available", e)
         }
     }
+
     fun register(msg: AuthMessage, signalService: SignalService){
         Log.d(TAG, "Connecting to ${msg.origin}")
+        TODO()
     }
 
-    fun signal(origin: String) {
-        Log.d(TAG, "Connecting to $origin")
+    // TODO: Remove in favor of HD validation
+    fun hasAlgorandTags(message: ByteArray): Boolean {
+        val prefixes =
+            listOf(
+                "appID",
+                "arc",
+                "aB",
+                "aD",
+                "aO",
+                "aP",
+                "aS",
+                "AS",
+                "BH",
+                "B256",
+                "BR",
+                "CR",
+                "GE",
+                "KP",
+                "MA",
+                "MB",
+                "MX",
+                "NIC",
+                "NIR",
+                "NIV",
+                "NPR",
+                "OT1",
+                "OT2",
+                "PF",
+                "PL",
+                "Program",
+                "ProgData",
+                "PS",
+                "PK",
+                "SD",
+                "SpecialAddr",
+                "STIB",
+                "spc",
+                "spm",
+                "spp",
+                "sps",
+                "spv",
+                "TE",
+                "TG",
+                "TL",
+                "TX",
+                "VO"
+            )
+        // Prefixes taken from go-algorand node software code
+        // https://github.com/algorand/go-algorand/blob/master/protocol/hash.go
+
+        val messageString = String(message)
+        return prefixes.any { messageString.startsWith(it) }
     }
 
     companion object {

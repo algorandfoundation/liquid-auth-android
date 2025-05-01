@@ -6,6 +6,7 @@ import android.content.ServiceConnection
 import android.net.Uri
 import android.os.Bundle
 import android.util.Log
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -36,7 +37,10 @@ class MainActivity : ComponentActivity() {
     // Data
     private var rootKey: String? = null
     private val keyManager = AppDependencies.mnemonicManager
-    private var mainViewModel = MainViewModel()
+
+    // View Models
+    private var notifications = NotificationViewModel()
+    private var mainViewModel = MainViewModel(notifications)
     private var credentialViewModel = CredentialsViewModel(
         scanner = scanner,
         keysRepository = AppDependencies.keysRepository,
@@ -45,7 +49,6 @@ class MainActivity : ComponentActivity() {
         keysRepository = AppDependencies.keysRepository,
         keyManager = keyManager,
     )
-
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -76,6 +79,21 @@ class MainActivity : ComponentActivity() {
                     Log.d(TAG, "Handle scanner")
                     lifecycleScope.launch {
                         mainViewModel.onScan(this@MainActivity, it)
+
+                        // Handle messages from Signal Service
+                        AppDependencies.signalService.handleMessages(this@MainActivity, {
+                            runOnUiThread {
+                                Toast.makeText(this@MainActivity, it, Toast.LENGTH_LONG).show()
+                            }
+                        }, {
+                            runOnUiThread {
+                                Toast.makeText(this@MainActivity, it, Toast.LENGTH_LONG).show()
+                            }
+                        },
+                            notifications.createNotificationBuilder(this@MainActivity),
+                            NotificationViewModel.SERVICE_NOTIFICATION_ID,
+                            MainActivity::class.java
+                        )
                     }
                 }
             }
