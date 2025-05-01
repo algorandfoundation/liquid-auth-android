@@ -22,6 +22,7 @@ import foundation.algorand.auth.connect.SignalService
 import foundation.algorand.auth.fido2.AssertionApi
 import foundation.algorand.auth.fido2.AttestationApi
 import okhttp3.OkHttpClient
+import org.webrtc.PeerConnection
 
 
 object AppDependencies {
@@ -39,6 +40,52 @@ object AppDependencies {
     lateinit var mConnection: ServiceConnection
     lateinit var signalService: SignalService
     var mBounded = false
+    val iceServers =
+        listOf(
+            PeerConnection.IceServer.builder("stun:stun.l.google.com:19302")
+                .createIceServer(),
+            PeerConnection.IceServer.builder("stun:stun1.l.google.com:19302")
+                .createIceServer(),
+            PeerConnection.IceServer.builder("stun:stun2.l.google.com:19302")
+                .createIceServer(),
+            createIceServer(
+                "turn:global.turn.nodely.network:80?transport=tcp",
+                BuildConfig.NODELY_TURN_USERNAME,
+                BuildConfig.NODELY_TURN_CREDENTIAL
+            ),
+            createIceServer(
+                "turns:global.turn.nodely.network:443?transport=tcp",
+                BuildConfig.NODELY_TURN_USERNAME,
+                BuildConfig.NODELY_TURN_CREDENTIAL
+            ),
+            createIceServer(
+                "turn:eu.turn.nodely.io:80?transport=tcp",
+                BuildConfig.NODELY_TURN_USERNAME,
+                BuildConfig.NODELY_TURN_CREDENTIAL
+            ),
+            createIceServer(
+                "turns:eu.turn.nodely.io:443?transport=tcp",
+                BuildConfig.NODELY_TURN_USERNAME,
+                BuildConfig.NODELY_TURN_CREDENTIAL
+            ),
+            createIceServer(
+                "turn:us.turn.nodely.io:80?transport=tcp",
+                BuildConfig.NODELY_TURN_USERNAME,
+                BuildConfig.NODELY_TURN_CREDENTIAL
+            ),
+            createIceServer(
+                "turns:us.turn.nodely.io:443?transport=tcp",
+                BuildConfig.NODELY_TURN_USERNAME,
+                BuildConfig.NODELY_TURN_CREDENTIAL
+            ),
+        )
+
+    private fun createIceServer(uri: String, username: String, password: String): PeerConnection.IceServer {
+        return PeerConnection.IceServer.builder(uri)
+            .setUsername(username)
+            .setPassword(password)
+            .createIceServer()
+    }
 
     // FIDO Configuration
     var attestationApi = AttestationApi(httpClient)

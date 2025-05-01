@@ -10,13 +10,20 @@ import androidx.credentials.exceptions.NoCredentialException
 import androidx.lifecycle.ViewModel
 import co.algorand.liquid.wallet.encoding.b64Decode
 import co.algorand.liquid.wallet.encoding.b64Encode
+import com.algorand.algosdk.account.Account
 import foundation.algorand.auth.connect.AuthMessage
 import foundation.algorand.auth.connect.SignalService
+import foundation.algorand.crypto.avm.KeyPairs
 import kotlinx.coroutines.runBlocking
+import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.json.JSONObject
 import ru.gildor.coroutines.okhttp.await
+import java.security.Security
 
 class MainViewModel(): ViewModel() {
+    private var testAccount: Account? = null
+
+    private val notifications = NotificationViewModel()
     private val xHDKeyManager = AppDependencies.xHDKeyManager
     private val keysRepository = AppDependencies.keysRepository
     private val attestationApi = AppDependencies.attestationApi
@@ -27,7 +34,14 @@ class MainViewModel(): ViewModel() {
         "${BuildConfig.APPLICATION_ID}/${BuildConfig.VERSION_NAME} " +
                 "(Android ${Build.VERSION.RELEASE}; ${Build.MODEL}; ${Build.BRAND})"
 
-    fun onScan(context: Context, uri: Uri){
+    init {
+        // Override security for BC
+        Security.removeProvider("BC")
+        Security.insertProviderAt(BouncyCastleProvider(), 0)
+        testAccount = xHDKeyManager.getTmpAccount()
+    }
+
+    suspend fun onScan(context: Context, uri: Uri){
         Log.d(TAG, "Connecting to $uri")
         val address = xHDKeyManager.getAddress()
         if(address === null){
@@ -35,18 +49,26 @@ class MainViewModel(): ViewModel() {
         }
         // TODO: look for existing credentials
         val hasCredential = false
-        runBlocking {
-           authenticate(context, AuthMessage.fromUri(uri))
-        }
 
+        val msg = AuthMessage.fromUri(uri)
+
+        authenticate(context, msg)
     }
     suspend fun authenticate(context: Context, msg: AuthMessage){
         Log.d(TAG, "Connecting to ${msg.origin}")
 
-        val address = xHDKeyManager.getAddress()
-        if(address === null){
-            throw Exception("No account assigned")
-        }
+        val signalService = AppDependencies.signalService
+        signalService.start(
+            msg.origin,
+            AppDependencies.httpClient,
+            notifications.createNotificationBuilder(context),
+            NotificationViewModel.SERVICE_NOTIFICATION_ID,
+            MainActivity::class.java,
+        )
+
+        // TODO: signature validation for account
+//        val address = xHDKeyManager.getAddress()
+        val address = testAccount!!.address.toString()
         // Create the Liquid Extension
         val options = JSONObject()
         options.put("username", address.toString())
@@ -73,7 +95,9 @@ class MainViewModel(): ViewModel() {
                 request = createPublicKeyCredentialRequest
             )
             if(result is CreatePublicKeyCredentialResponse){
-                val additionalSignature = xHDKeyManager.rawSign(b64Decode(challenge))
+//                val additionalSignature = xHDKeyManager.rawSign(b64Decode(challenge))
+                val keyPair = KeyPairs.getKeyPair(testAccount!!.toMnemonic())
+                val additionalSignature = KeyPairs.rawSignBytes(b64Decode(challenge), keyPair.private)
                 val authenticatorJson = result.registrationResponseJson
                 Log.d(TAG, "Received Attestation Authenticator Response: ${authenticatorJson}")
                 val liquidExtJSON = JSONObject()
@@ -84,6 +108,13 @@ class MainViewModel(): ViewModel() {
                 liquidExtJSON.put("device", Build.MODEL)
                 val submit = attestationApi.postAttestationResult(msg.origin, userAgent, result.registrationResponseJson, liquidExtJSON).await()
                 Log.d(TAG, "Received Attestation Service Response: ${submit.body!!.string()}")
+                if(AppDependencies.mBounded){
+                    val iceServers = AppDependencies.iceServers
+                    signalService.peer(msg.requestId, "answer", iceServers)
+                } else {
+                    throw Exception("Invalid peer client")
+                }
+
             }
 
         } catch (e: NoCredentialException) {

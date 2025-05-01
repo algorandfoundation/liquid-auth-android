@@ -3,6 +3,7 @@ package co.algorand.liquid.wallet.crypto
 import android.util.Log
 import cash.z.ecc.android.bip39.Mnemonics
 import cash.z.ecc.android.bip39.toSeed
+import com.algorand.algosdk.account.Account
 import foundation.algorand.deterministicP256.DeterministicP256
 import foundation.algorand.xhdwalletapi.KeyContext
 import foundation.algorand.xhdwalletapi.XHDWalletAPIAndroid
@@ -21,6 +22,11 @@ class HDKeyManager {
     private var spendKey: ByteArray? = null
     // Deterministic P-256 Passkeys
     private var rootPasskey: ByteArray? = null
+
+    fun getTmpAccount(): Account? {
+        if(spendKey === null) return null
+        return Account(spendKey)
+    }
 
     fun getAddress(): String? {
         if(spendKey === null) return null

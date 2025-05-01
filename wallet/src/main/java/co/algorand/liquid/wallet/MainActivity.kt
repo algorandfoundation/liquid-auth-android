@@ -1,17 +1,16 @@
 package co.algorand.liquid.wallet
 
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
 import android.net.Uri
 import android.os.Bundle
-import android.os.IBinder
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.Composable
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -22,6 +21,7 @@ import co.algorand.liquid.wallet.ui.keys.KeyScreen
 import co.algorand.liquid.wallet.ui.keys.KeyViewModel
 import co.algorand.liquid.wallet.ui.theme.LiquidTheme
 import foundation.algorand.auth.connect.SignalService
+import kotlinx.coroutines.launch
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import java.security.Security
 
@@ -32,8 +32,6 @@ class MainActivity : ComponentActivity() {
     // WebRTC Service Binding
     lateinit var mConnection: ServiceConnection
     private lateinit var startServiceIntent: Intent
-    lateinit var signalService: SignalService
-    var mBounded = false
 
     // Data
     private var rootKey: String? = null
@@ -52,20 +50,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        mConnection =
-            object : ServiceConnection {
-                override fun onServiceDisconnected(name: ComponentName) {
-                    mBounded = false
-
-                }
-
-                override fun onServiceConnected(name: ComponentName, service: IBinder) {
-                    mBounded = true
-                    val mLocalBinder = service as SignalService.LocalBinder
-                    signalService = mLocalBinder.getServerInstance()
-                    signalService.startService(startServiceIntent)
-                }
-            }
+        mConnection = AppDependencies.mConnection
 
         // Check if the request was a URI DeepLink
         val isDeepLink = intent?.data != null && intent.data is Uri
@@ -89,7 +74,9 @@ class MainActivity : ComponentActivity() {
                 val navController = rememberNavController()
                 MainAppView(rootKey, navController, credentialViewModel, keyViewModel) {
                     Log.d(TAG, "Handle scanner")
-                    mainViewModel.onScan(this@MainActivity, it)
+                    lifecycleScope.launch {
+                        mainViewModel.onScan(this@MainActivity, it)
+                    }
                 }
             }
         }

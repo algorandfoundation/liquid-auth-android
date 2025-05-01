@@ -126,6 +126,7 @@ class SignalService : Service() {
         type: String,
         iceServers: List<PeerConnection.IceServer>,
     ) {
+        Log.d(TAG, "Peering $type $requestId")
         dataChannel = signalClient?.peer(requestId, type, iceServers)
         peerClient = signalClient?.peerClient
         peerConnection = peerClient?.peerConnection
