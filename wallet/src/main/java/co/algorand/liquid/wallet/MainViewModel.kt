@@ -14,17 +14,13 @@ import androidx.credentials.exceptions.NoCredentialException
 import androidx.lifecycle.ViewModel
 import co.algorand.liquid.wallet.encoding.b64Decode
 import co.algorand.liquid.wallet.encoding.b64Encode
-import com.algorand.algosdk.account.Account
 import foundation.algorand.auth.connect.AuthMessage
-import foundation.algorand.auth.connect.SignalService
-import foundation.algorand.crypto.avm.KeyPairs
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.json.JSONObject
 import ru.gildor.coroutines.okhttp.await
 import java.security.Security
 
 class MainViewModel(notificationViewModel: NotificationViewModel): ViewModel() {
-    private var testAccount: Account? = null
     private val notifications = notificationViewModel
     private val xHDKeyManager = AppDependencies.xHDKeyManager
     private val keysRepository = AppDependencies.keysRepository
@@ -40,9 +36,16 @@ class MainViewModel(notificationViewModel: NotificationViewModel): ViewModel() {
         // Override security for BC
         Security.removeProvider("BC")
         Security.insertProviderAt(BouncyCastleProvider(), 0)
-        testAccount = xHDKeyManager.getTmpAccount()
     }
 
+    /**
+     * Handles the scanning process for a given URI. This method attempts to connect to the provided URI
+     * and processes authentication or registration based on the state of the credentials.
+     *
+     * @param context The context from which the scan is being initiated.
+     * @param uri The URI to be scanned and processed.
+     * @throws Exception If no account is assigned or an error occurs during the scan handling process.
+     */
     suspend fun onScan(context: Context, uri: Uri){
         Log.d(TAG, "Connecting to $uri")
         val address = xHDKeyManager.getAddress()
@@ -59,7 +62,19 @@ class MainViewModel(notificationViewModel: NotificationViewModel): ViewModel() {
         //} else {
         register(context, msg)
         //}
+
+
     }
+
+    /**
+     * Constructs a Liquid Extension JSON object representing an extension for authentication or messaging purposes.
+     * Includes details such as type, address, and a signature, along with optional metadata.
+     *
+     * @param msg The authentication message containing request details.
+     * @param address The address to be included in the generated JSON object.
+     * @param signature The byte array representing the signature to be Base64-encoded and included in the JSON object.
+     * @return A JSONObject containing the constructed extension with the provided details and metadata.
+     */
     fun getExtension(msg: AuthMessage, address: String, signature: ByteArray): JSONObject{
         // Add Liquid Extension
         val liquidExtJSON = JSONObject()
@@ -71,6 +86,14 @@ class MainViewModel(notificationViewModel: NotificationViewModel): ViewModel() {
         liquidExtJSON.put("device", Build.MODEL)
         return liquidExtJSON
     }
+
+    /**
+     * Generates a JSON object containing options for Liquid authentication. The method sets
+     * up the username, display name, authenticator selection preferences, and extension details.
+     *
+     * @param address The address to be associated with the generated options.
+     * @return A JSONObject containing the constructed options for Liquid authentication.
+     */
     fun getOptions(address: String): JSONObject{
         // Create the Liquid Extension
         val options = JSONObject()
@@ -82,9 +105,11 @@ class MainViewModel(notificationViewModel: NotificationViewModel): ViewModel() {
         options.put("extensions", extensions)
         return options
     }
+
     suspend fun register(context: Context, msg: AuthMessage){
         Log.d(TAG, "Connecting to ${msg.origin}")
 
+        // Start the signal service
         val signalService = AppDependencies.signalService
         signalService.start(
             msg.origin,
@@ -94,19 +119,19 @@ class MainViewModel(notificationViewModel: NotificationViewModel): ViewModel() {
             MainActivity::class.java,
         )
 
-        // TODO: signature validation for account
-        //   val address = xHDKeyManager.getAddress()
-        val address = testAccount!!.address.toString()
-        // Create the Liquid Extension
-        val options = getOptions(address)
+        // Account to use for registration
+        val address = xHDKeyManager.getAddress()
 
+        // Request that the service use the Liquid Extension
+        val options = getOptions(address!!)
         val response = attestationApi.postAttestationOptions(msg.origin, userAgent, options).await()
         val requestJson = response.body!!.string()
 
+        Log.d(TAG, "Received Attestation Options: $requestJson")
         val challenge = JSONObject(requestJson).getString("challenge")
 
-        Log.d(TAG, "Received Attestation Options: ${requestJson}")
 
+        // Create the Request from the Authenticator
         val createPublicKeyCredentialRequest = CreatePublicKeyCredentialRequest(
             requestJson = requestJson
         )
@@ -120,31 +145,27 @@ class MainViewModel(notificationViewModel: NotificationViewModel): ViewModel() {
                 val challengeBytes = b64Decode(challenge)
                 if(hasAlgorandTags(challengeBytes)){
                     throw Exception("Attempted to sign a message with an Algorand prefix")
+                } else {
+                    Log.d(TAG, "Signing $challenge with $address")
                 }
                 // Note: This signature may change before the 1.0.0 release
-                // val additionalSignature = xHDKeyManager.rawSign(challengeBytes)
-
-                // TODO: Signature issue with HD key
-                val keyPair = KeyPairs.getKeyPair(testAccount!!.toMnemonic())
-                val additionalSignature = KeyPairs.rawSignBytes(challengeBytes, keyPair.private)
+                 val additionalSignature = xHDKeyManager.rawSign(challengeBytes)
 
                 // Handle Authenticator Response
                 val authenticatorJson = result.registrationResponseJson
                 Log.d(TAG, "Received Attestation Authenticator Response: $authenticatorJson")
 
                 // Add Liquid Extension
-                val liquidExtJSON = JSONObject()
-                liquidExtJSON.put("type", "algorand")
-                liquidExtJSON.put("address", address.toString())
-                liquidExtJSON.put("signature", b64Encode(additionalSignature!!))
-                // Optional Arguments
-                liquidExtJSON.put("requestId", msg.requestId)
-                liquidExtJSON.put("device", Build.MODEL)
+                val liquidExtJSON = getExtension(msg, address, additionalSignature!!)
 
                 // Submit result to the Liquid Service
                 val submit = attestationApi.postAttestationResult(msg.origin, userAgent, result.registrationResponseJson, liquidExtJSON).await()
+                val submitBodyString = submit.body!!.string()
+                Log.d(TAG, "Received Attestation Service Response: $submitBodyString")
 
-                Log.d(TAG, "Received Attestation Service Response: ${submit.body!!.string()}")
+                if(submit.code != 201){
+                    throw Exception(submitBodyString)
+                }
 
                 // Optionally, connect to a peer
                 if(AppDependencies.mBounded){
@@ -173,16 +194,16 @@ class MainViewModel(notificationViewModel: NotificationViewModel): ViewModel() {
             MainActivity::class.java,
         )
 
-        // TODO: signature validation for account
-        //   val address = xHDKeyManager.getAddress()
-        val address = testAccount!!.address.toString()
+        // Account to use for registration
+        val address = xHDKeyManager.getAddress()
+        if(address === null){
+            throw Exception("Address not found")
+        }
 
         val response = assertionApi.postAssertionOptions(msg.origin, userAgent, credId).await()
         val requestJson = response.body!!.string()
 
         val challenge = JSONObject(requestJson).getString("challenge")
-
-
 
         val getPublicKeyCredentialOption = GetPublicKeyCredentialOption(
             requestJson = requestJson
@@ -202,9 +223,9 @@ class MainViewModel(notificationViewModel: NotificationViewModel): ViewModel() {
             if(hasAlgorandTags(challengeBytes)){
                 throw Exception("Attempted to sign a message with an Algorand prefix")
             }
-            val keyPair = KeyPairs.getKeyPair(testAccount!!.toMnemonic())
-            val signature = KeyPairs.rawSignBytes(challengeBytes, keyPair.private)
-            val extension = getExtension(msg, address, signature!!)
+            // Note: This signature may change before the 1.0.0 release
+            val signature = xHDKeyManager.rawSign(challengeBytes)!!
+            val extension = getExtension(msg, address, signature)
             val credential = result.credential
             if(credential is PublicKeyCredential){
                 val submit = assertionApi.postAssertionResult(msg.origin, userAgent, credential.authenticationResponseJson, extension).await()

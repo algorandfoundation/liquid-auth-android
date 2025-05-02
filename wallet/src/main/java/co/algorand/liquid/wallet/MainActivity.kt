@@ -1,5 +1,6 @@
 package co.algorand.liquid.wallet
 
+import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
@@ -25,6 +26,7 @@ import foundation.algorand.auth.connect.SignalService
 import kotlinx.coroutines.launch
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import java.security.Security
+
 
 class MainActivity : ComponentActivity() {
     // Barcode Scanner
@@ -53,6 +55,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        val notificationManager =
+            getSystemService<NotificationManager?>(NotificationManager::class.java)
+        notifications.createChannels(notificationManager)
+
         mConnection = AppDependencies.mConnection
 
         // Check if the request was a URI DeepLink
@@ -78,7 +84,13 @@ class MainActivity : ComponentActivity() {
                 MainAppView(rootKey, navController, credentialViewModel, keyViewModel) {
                     Log.d(TAG, "Handle scanner")
                     lifecycleScope.launch {
-                        mainViewModel.onScan(this@MainActivity, it)
+                        try{
+                            mainViewModel.onScan(this@MainActivity, it)
+                        } catch (e: Exception){
+                            runOnUiThread {
+                                Toast.makeText(this@MainActivity, e.message, Toast.LENGTH_LONG).show()
+                            }
+                        }
 
                         // Handle messages from Signal Service
                         AppDependencies.signalService.handleMessages(this@MainActivity, {
