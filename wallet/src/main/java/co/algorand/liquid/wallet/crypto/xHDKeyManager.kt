@@ -3,7 +3,6 @@ package co.algorand.liquid.wallet.crypto
 import android.util.Log
 import cash.z.ecc.android.bip39.Mnemonics
 import cash.z.ecc.android.bip39.toSeed
-import com.algorand.algosdk.account.Account
 import foundation.algorand.deterministicP256.DeterministicP256
 import foundation.algorand.xhdwalletapi.KeyContext
 import foundation.algorand.xhdwalletapi.XHDWalletAPIAndroid
@@ -22,11 +21,6 @@ class HDKeyManager {
     private var spendKey: ByteArray? = null
     // Deterministic P-256 Passkeys
     private var rootPasskey: ByteArray? = null
-
-    fun getTmpAccount(): Account? {
-        if(spendKey === null) return null
-        return Account(spendKey)
-    }
 
     fun getAddress(): String? {
         if(spendKey === null) return null
@@ -58,14 +52,44 @@ class HDKeyManager {
     fun generatePasskey(origin: String, userHandle: String): KeyPair {
         return xPasskey.genDomainSpecificKeypair(rootPasskey!!, origin, userHandle.lowercase())
     }
+    /**
+     * Harden a number (set the highest bit to 1) Note that the input is UInt and the output is also
+     * UInt
+     *
+     * @param num
+     * @returns
+     * @deprecated
+     */
+    private fun harden(num: UInt): UInt = 0x80000000.toUInt() + num
 
+    /**
+     * Get the BIP44 path from the context, account and keyIndex
+     *
+     * @param context
+     * @param account
+     * @param keyIndex
+     * @returns
+     * @deprecated
+     */
+    private fun getBIP44PathFromContext(
+        context: KeyContext,
+        account: UInt,
+        change: UInt,
+        keyIndex: UInt
+    ): List<UInt> {
+        return when (context) {
+            KeyContext.Address -> listOf(harden(44u), harden(283u), harden(account), change, keyIndex)
+            KeyContext.Identity -> listOf(harden(44u), harden(0u), harden(account), change, keyIndex)
+        }
+    }
+
+    /**
+     * @deprecated
+     */
     fun rawSign(bytes: ByteArray): ByteArray? {
-        return xHD?.rawSign(listOf(
-            0u,
-            0u,
-            0u,
-            ),
-            bytes
+        return xHD?.rawSign(
+            getBIP44PathFromContext(KeyContext.Address, 0u, 0u, 0u),
+            bytes,
         )
     }
 
