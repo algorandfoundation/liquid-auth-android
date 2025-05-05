@@ -4,6 +4,9 @@ import android.content.Context
 import android.net.Uri
 import android.os.Build
 import android.util.Log
+import androidx.activity.ComponentActivity
+import androidx.biometric.BiometricPrompt
+import androidx.core.content.ContextCompat
 import androidx.credentials.CreatePublicKeyCredentialRequest
 import androidx.credentials.CreatePublicKeyCredentialResponse
 import androidx.credentials.GetCredentialRequest
@@ -11,14 +14,27 @@ import androidx.credentials.GetPublicKeyCredentialOption
 import androidx.credentials.PublicKeyCredential
 import androidx.credentials.exceptions.GetCredentialException
 import androidx.credentials.exceptions.NoCredentialException
+import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.lifecycleScope
+import co.algorand.liquid.wallet.MainActivity
 import co.algorand.liquid.wallet.encoding.b64Decode
 import co.algorand.liquid.wallet.encoding.b64Encode
 import foundation.algorand.auth.connect.AuthMessage
+import foundation.algorand.crypto.EncoderType
+import foundation.algorand.provider.Message
+import foundation.algorand.provider.avm.models.RequestMessage
+import foundation.algorand.provider.avm.models.ResponseMessage
+import foundation.algorand.provider.avm.models.SignTransactionsParams
+import foundation.algorand.provider.avm.models.SignTransactionsResult
+import kotlinx.coroutines.launch
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.json.JSONObject
 import ru.gildor.coroutines.okhttp.await
 import java.security.Security
+import kotlin.coroutines.resume
+import kotlin.coroutines.suspendCoroutine
+import kotlin.io.encoding.Base64
 
 class MainViewModel(notificationViewModel: NotificationViewModel): ViewModel() {
     private val notifications = notificationViewModel
@@ -27,6 +43,11 @@ class MainViewModel(notificationViewModel: NotificationViewModel): ViewModel() {
     private val attestationApi = AppDependencies.attestationApi
     private val assertionApi = AppDependencies.assertionApi
     private val credentialManager = AppDependencies.credentialManager
+    private val provider = AppDependencies.provider
+
+    // Biometrics Prompt
+    private lateinit var promptInfo: BiometricPrompt.PromptInfo
+
     // FIDO User Agent for validating the device
     private val userAgent =
         "${BuildConfig.APPLICATION_ID}/${BuildConfig.VERSION_NAME} " +
@@ -55,13 +76,13 @@ class MainViewModel(notificationViewModel: NotificationViewModel): ViewModel() {
 
         val msg = AuthMessage.fromUri(uri)
 
-        //val passkeysForSite = keysRepository.credentialsForSite(msg.origin)
+        val passkeysForSite = keysRepository.credentialsForSite(msg.origin.replace("https://", ""))
 
-        //if(passkeysForSite!!.passkeys.isNotEmpty()){
-        // authenticate(context, msg, passkeysForSite.passkeys[0].credentialId)
-        //} else {
-        register(context, msg)
-        //}
+        if(passkeysForSite !== null && passkeysForSite.passkeys.isNotEmpty()){
+            authenticate(context, msg, passkeysForSite.passkeys[0].credentialId)
+        } else {
+         register(context, msg)
+        }
 
 
     }
@@ -104,6 +125,74 @@ class MainViewModel(notificationViewModel: NotificationViewModel): ViewModel() {
         extensions.put("liquid", true)
         options.put("extensions", extensions)
         return options
+    }
+
+    /** Transaction Biometric Prompt */
+    suspend fun biometrics(
+        activity: FragmentActivity,
+        message: SignTransactionsParams
+    ): BiometricPrompt.AuthenticationResult? {
+        return suspendCoroutine { continuation ->
+            var biometricPrompt =
+                BiometricPrompt(
+                    activity,
+                    ContextCompat.getMainExecutor(activity),
+                    object : BiometricPrompt.AuthenticationCallback() {
+                        override fun onAuthenticationSucceeded(
+                            result: BiometricPrompt.AuthenticationResult
+                        ) {
+                            super.onAuthenticationSucceeded(result)
+                            continuation.resume(result)
+                        }
+
+                        override fun onAuthenticationFailed() {
+                            super.onAuthenticationFailed()
+                            continuation.resume(null)
+                        }
+                    }
+                )
+            val promptInfo =
+                BiometricPrompt.PromptInfo.Builder()
+                    .setTitle("Transaction(s) ${message.txns.size}")
+                    .setSubtitle("Provider: ${message.providerId}")
+                    .setNegativeButtonText("Cancel")
+                    .build()
+            biometricPrompt.authenticate(promptInfo)
+        }
+    }
+    suspend fun handleMessage(activity: FragmentActivity, msgStr: String, onError: (String)-> Unit){
+        val signalService = AppDependencies.signalService
+
+        try {
+            val message = Message(b64Decode(msgStr), EncoderType.CBOR)
+            val request = provider.encoder.decode<RequestMessage>(message.data, message.encoding)
+            if (request.reference == "arc0027:sign_transactions:request") {
+
+                    val params =
+                        provider.encoder.decode<SignTransactionsParams>(
+                            provider.encoder.encode(request.params, EncoderType.NONE),
+                            EncoderType.NONE
+                        )
+                    biometrics(activity, params)
+                    val resultMessage = provider.handleMessage(message) as ResponseMessage
+                    when (resultMessage.result) {
+                        is SignTransactionsResult -> {
+                            signalService.send(
+                                b64Encode(
+                                    resultMessage.toByteArray(EncoderType.CBOR)
+                                )
+                            )
+                        }
+                        else -> {
+                            TODO("Not Implemented")
+                        }
+                    }
+                }
+        } catch (e: Exception) {
+            val errMsg = e.message ?: "Couldn't decode message"
+            Log.e(TAG, errMsg)
+            onError(errMsg)
+        }
     }
 
     suspend fun register(context: Context, msg: AuthMessage){
@@ -201,6 +290,9 @@ class MainViewModel(notificationViewModel: NotificationViewModel): ViewModel() {
         }
 
         val response = assertionApi.postAssertionOptions(msg.origin, userAgent, credId).await()
+        if(response.code != 201){
+            throw Exception("Couldn't fetch the options")
+        }
         val requestJson = response.body!!.string()
 
         val challenge = JSONObject(requestJson).getString("challenge")

@@ -9,9 +9,14 @@ import android.os.Bundle
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.biometric.BiometricPrompt
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
+import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -23,12 +28,16 @@ import co.algorand.liquid.wallet.ui.keys.KeyScreen
 import co.algorand.liquid.wallet.ui.keys.KeyViewModel
 import co.algorand.liquid.wallet.ui.theme.LiquidTheme
 import foundation.algorand.auth.connect.SignalService
+import foundation.algorand.provider.avm.models.SignTransactionsParams
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import java.security.Security
+import kotlin.coroutines.resume
+import kotlin.coroutines.suspendCoroutine
 
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
     // Barcode Scanner
     val scanner = AppDependencies.scanner
 
@@ -87,15 +96,24 @@ class MainActivity : ComponentActivity() {
                         try{
                             mainViewModel.onScan(this@MainActivity, it)
                         } catch (e: Exception){
+                            val errMsg = e.message ?: "Something went wrong"
+                            Log.e(TAG, errMsg)
                             runOnUiThread {
-                                Toast.makeText(this@MainActivity, e.message, Toast.LENGTH_LONG).show()
+                                Toast.makeText(this@MainActivity, errMsg, Toast.LENGTH_LONG).show()
                             }
                         }
 
                         // Handle messages from Signal Service
-                        AppDependencies.signalService.handleMessages(this@MainActivity, {
+                        AppDependencies.signalService.handleMessages(this@MainActivity, { msg ->
+                            lifecycleScope.launch {
+                                mainViewModel.handleMessage(this@MainActivity, msg) {
+                                    runOnUiThread {
+                                        Toast.makeText(this@MainActivity, it, Toast.LENGTH_LONG).show()
+                                    }
+                                }
+                            }
                             runOnUiThread {
-                                Toast.makeText(this@MainActivity, it, Toast.LENGTH_LONG).show()
+                                Toast.makeText(this@MainActivity, msg, Toast.LENGTH_LONG).show()
                             }
                         }, {
                             runOnUiThread {
@@ -111,6 +129,7 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
 
     companion object {
         const val TAG = "MainActivity"

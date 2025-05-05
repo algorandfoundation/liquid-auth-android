@@ -59,8 +59,6 @@ android {
 dependencies {
     // Algorand Foundation Integration
     implementation(files("libs/dP256.jar"))
-    implementation(files("libs/provider-debug.aar"))
-    implementation(files("libs/crypto-debug.aar"))
     implementation("net.java.dev.jna:jna:5.14.0@aar")
     implementation(libs.java.uuid.generator)
     implementation(libs.xhdwalletapi.android)
@@ -70,6 +68,15 @@ dependencies {
 
     // Liquid Auth
     implementation(project(mapOf("path" to ":liquid")))
+
+    // AVM Provider
+    implementation(files("libs/provider-debug.aar"))
+    implementation(files("libs/crypto-debug.aar"))
+    implementation(libs.jackson.annotations)
+    implementation(libs.jackson.dataformat.msgpack)
+    implementation(libs.jackson.dataformat.cbor)
+    implementation(libs.json.kotlin.schema)
+
     // HTTP/Webrtc
     implementation(libs.okhttp)
     implementation(libs.kotlin.coroutines.okhttp)

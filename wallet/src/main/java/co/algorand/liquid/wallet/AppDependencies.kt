@@ -94,7 +94,7 @@ object AppDependencies {
     // AVM Provider Configuration
     val uuidGenerator = Generators.timeBasedEpochRandomGenerator()
     val providerId = uuidGenerator.generate().toString() // Add a fixed provider for your wallet
-    private val provider = AVMProvider(providerId)
+    val provider = AVMProvider(providerId)
     var providerIcon: Icon? = null
 
     fun init(context: Context) {
@@ -116,6 +116,8 @@ object AppDependencies {
         scanner = GmsBarcodeScanning.getClient(context)
         mnemonicManager = MnemonicManager(context)
         xHDKeyManager = HDKeyManager()
+
+        provider.setKeyManager(xHDKeyManager)
 
         var rootKey = mnemonicManager.fetch()
 

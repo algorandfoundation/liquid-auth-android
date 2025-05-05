@@ -1,15 +1,16 @@
 package co.algorand.liquid.wallet.provider
 
 import android.util.Log
+import co.algorand.liquid.wallet.crypto.HDKeyManager
+import co.algorand.liquid.wallet.encoding.b64Decode
+import co.algorand.liquid.wallet.encoding.b64Encode
 import com.algorand.algosdk.transaction.Transaction
 import com.algorand.algosdk.util.Encoder
 import com.fasterxml.uuid.Generators
 import foundation.algorand.crypto.EncoderType
-import foundation.algorand.crypto.avm.KeyPairs
 import foundation.algorand.provider.IBaseProvider
 import foundation.algorand.provider.Message
 import foundation.algorand.provider.avm.models.*
-import java.security.KeyPair
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 
@@ -21,7 +22,9 @@ import kotlin.io.encoding.ExperimentalEncodingApi
 class AVMProvider(val providerId: String): IBaseProvider {
     val uuidGenerator = Generators.timeBasedEpochRandomGenerator()
     val encoder = foundation.algorand.crypto.avm.Encoder()
-    private var keyPair: KeyPair? = null
+
+    private var keyManager: HDKeyManager? = null
+
 
     override fun handleMessage(message: Message): Any {
         val decoded = encoder.decode<RequestMessage>(message.data, message.encoding)
@@ -46,15 +49,15 @@ class AVMProvider(val providerId: String): IBaseProvider {
     /**
      * Update the KeyPair
      */
-    fun setKeyPair(keyPair: KeyPair) {
-        this.keyPair = keyPair
+    fun setKeyManager(manager: HDKeyManager) {
+        this.keyManager = manager
     }
     /**
      * Decode Unsigned Transaction
      */
     @OptIn(ExperimentalEncodingApi::class)
     private fun decodeUnsignedTransaction(unsignedTxn: String): Transaction? {
-        return Encoder.decodeFromMsgPack(Base64.decode(unsignedTxn), Transaction::class.java)
+        return Encoder.decodeFromMsgPack(b64Decode(unsignedTxn), Transaction::class.java)
     }
 
     /**
@@ -68,8 +71,8 @@ class AVMProvider(val providerId: String): IBaseProvider {
         val signedTxns = mutableListOf<String>()
         val txnIds = mutableListOf<String>()
         params.txns.forEach { txn ->
-            val inst = decodeUnsignedTransaction(Base64.encode(Base64.UrlSafe.decode(txn.txn!!)))
-            val signature = KeyPairs.rawSignBytes(inst!!.bytesToSign(), this.keyPair!!.private)
+            val inst = decodeUnsignedTransaction(txn.txn!!)
+            val signature = keyManager!!.rawSign(inst!!.bytesToSign())
             signedTxns.add(Base64.UrlSafe.encode(signature!!))
             txnIds.add(inst.txID())
         }
