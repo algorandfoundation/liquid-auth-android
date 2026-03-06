@@ -37,8 +37,14 @@ class AuthMessage @Inject constructor(
             if(stringContents.startsWith("liquid://")) {
                return fromUri(Uri.parse(stringContents))
             } else {
-                // Fallback to JSON renderer
+                // Fallback 
                 val json = JSONObject(stringContents)
+                if (!json.has("origin")) {
+                    throw IllegalArgumentException("Invalid QR code: missing 'origin' field")
+                }
+                if (!json.has("requestId")) {
+                    throw IllegalArgumentException("Invalid QR code: missing 'requestId' field")
+                }
                 val origin = json.get("origin").toString()
                 val requestId = json.get("requestId").toString()
                 return AuthMessage(origin, requestId)

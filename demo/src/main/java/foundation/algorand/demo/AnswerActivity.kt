@@ -203,8 +203,9 @@ class AnswerActivity : AppCompatActivity() {
         // Set Security
         val policy = StrictMode.ThreadPolicy.Builder().permitAll().build()
         StrictMode.setThreadPolicy(policy)
+        // This allows Algorand SDK Account creation to use BouncyCastle for EdDSA
         Security.removeProvider("BC")
-        Security.insertProviderAt(BouncyCastleProvider(), 0)
+        Security.insertProviderAt(BouncyCastleProvider(), 1)
 
         // Create FIDO Client, TODO: refactor to Credential Manager
         fido2Client = Fido2ApiClient(this@AnswerActivity)
@@ -626,47 +627,53 @@ class AnswerActivity : AppCompatActivity() {
         GmsBarcodeScanning.getClient(this@AnswerActivity)
                 .startScan()
                 .addOnSuccessListener { barcode ->
-                    // Handle any scanned FIDO URI directly
-                    if (barcode.displayValue!!.startsWith("FIDO:/")) {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                            startActivity(
-                                    Intent(Intent.ACTION_VIEW, Uri.parse(barcode.displayValue))
-                            )
-                        } else {
-                            Toast.makeText(
-                                            this@AnswerActivity,
-                                            "Android 14 Required",
-                                            Toast.LENGTH_LONG
-                                    )
-                                    .show()
-                        }
-                        // Handle Liquid Auth URI
-                    } else {
-                        // Decode Barcode Message
-                        val msg = AuthMessage.fromBarcode(barcode)
-                        viewModel.setMessage(msg)
-                        signalService!!.updateDeepLinkFlag(false)
-                        signalService?.start(
-                                msg.origin,
-                                httpClient,
-                                notifications.createNotificationBuilder(this@AnswerActivity),
-                                NotificationViewModel.SERVICE_NOTIFICATION_ID,
-                                AnswerActivity::class.java,
-                        )
-                        // Connect to Service
-                        lifecycleScope.launch {
-                            val savedCredential =
-                                    credentialRepository.getCredentialByOrigin(
-                                            this@AnswerActivity,
-                                            msg.origin
-                                    )
-                            signalClient = SignalClient(msg.origin, this@AnswerActivity, httpClient)
-                            if (savedCredential === null) {
-                                register(msg)
+                    try {
+                        // Handle any scanned FIDO URI directly
+                        if (barcode.displayValue!!.startsWith("FIDO:/")) {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                                startActivity(
+                                        Intent(Intent.ACTION_VIEW, Uri.parse(barcode.displayValue))
+                                )
                             } else {
-                                authenticate(msg, savedCredential)
+                                Toast.makeText(
+                                                this@AnswerActivity,
+                                                "Android 14 Required",
+                                                Toast.LENGTH_LONG
+                                        )
+                                        .show()
+                            }
+                        } else {
+                            val msg = AuthMessage.fromBarcode(barcode)
+                            viewModel.setMessage(msg)
+                            signalService!!.updateDeepLinkFlag(false)
+                            signalService?.start(
+                                    msg.origin,
+                                    httpClient,
+                                    notifications.createNotificationBuilder(this@AnswerActivity),
+                                    NotificationViewModel.SERVICE_NOTIFICATION_ID,
+                                    AnswerActivity::class.java,
+                            )
+                            lifecycleScope.launch {
+                                val savedCredential =
+                                        credentialRepository.getCredentialByOrigin(
+                                                this@AnswerActivity,
+                                                msg.origin
+                                        )
+                                signalClient = SignalClient(msg.origin, this@AnswerActivity, httpClient)
+                                if (savedCredential === null) {
+                                    register(msg)
+                                } else {
+                                    authenticate(msg, savedCredential)
+                                }
                             }
                         }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error processing barcode: ${e.message}")
+                        Toast.makeText(
+                                this@AnswerActivity,
+                                "Invalid QR code: ${e.message}",
+                                Toast.LENGTH_LONG
+                        ).show()
                     }
                 }
                 .addOnCanceledListener {
