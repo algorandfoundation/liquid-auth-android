@@ -1,3 +1,10 @@
+# [1.0.0-canary.7](https://github.com/algorandfoundation/liquid-auth-android/compare/v1.0.0-canary.6...v1.0.0-canary.7) (2026-03-07)
+
+
+### Bug Fixes
+
+* Change priority of BouncyCastle security provider so it doesnt take precedence over Android default provider ([c38e789](https://github.com/algorandfoundation/liquid-auth-android/commit/c38e78996ed61d75dd9d5da5044dbc90070daf29))
+
 # [1.0.0-canary.6](https://github.com/algorandfoundation/liquid-auth-android/compare/v1.0.0-canary.5...v1.0.0-canary.6) (2024-09-13)
 
 
