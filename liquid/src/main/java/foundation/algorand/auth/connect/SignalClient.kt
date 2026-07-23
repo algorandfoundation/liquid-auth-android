@@ -174,7 +174,7 @@ class SignalClient @Inject constructor(
             peerContinuation = continuation
             peerResumed = false
             peerJob = scope.launch {
-                val clientType = if (type === "offer") "answer" else "offer"
+                val clientType = if (type == "offer") "answer" else "offer"
                 peerClient = PeerApi(context)
                 peerClient?.onConnectionStateChange = onConnectionStateChange
                 // Note: the peer continuation is resumed at most once via
@@ -183,7 +183,7 @@ class SignalClient @Inject constructor(
                 // Buffer ICE Candidates if they arrive before the Peer Connection is established
                 val candidatesBuffer = mutableListOf<IceCandidate>()
                 // If we are waiting on an offer, create a link to the address
-                if(type === "offer"){
+                if(type == "offer"){
                     link(requestId)
                 }
                 // Listen to Remote ICE Candidates
@@ -228,7 +228,7 @@ class SignalClient @Inject constructor(
                 }
 
                 // Wait for Offer, then create Answer
-                if (type === "offer") {
+                if (type == "offer") {
                     val sdp = signal(type)
                      Log.d(TAG, "Recieved the SDP!(${sdp})")
                     peerClient?.setRemoteDescription(sdp)
@@ -250,7 +250,7 @@ class SignalClient @Inject constructor(
 
                 }
                 // Create an Offer, wait for answer
-                else if (type === "answer") {
+                else if (type == "answer") {
                     // Create the DataChannel(s). Defaults to a single `liquid`
                     // channel, but callers may request several named channels.
                     val channelConfig = if (dataChannels.isNullOrEmpty()) {
@@ -335,7 +335,7 @@ class SignalClient @Inject constructor(
                     TAG,
                     "signal.on${type.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() }}Description($description)"
                 )
-                val sdpType = if (type === "offer") SessionDescription.Type.OFFER else SessionDescription.Type.ANSWER
+                val sdpType = if (type == "offer") SessionDescription.Type.OFFER else SessionDescription.Type.ANSWER
                 continuation.resume(SessionDescription(sdpType, description))
             }
         }

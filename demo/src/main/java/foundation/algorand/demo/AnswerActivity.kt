@@ -801,7 +801,7 @@ class AnswerActivity : AppCompatActivity() {
                                     },
                                     { _, state ->
                                         Log.d(TAG, "onStateChange($state)")
-                                        if (state === "OPEN") {
+                                        if (state == "OPEN") {
                                             Log.d(TAG, "Sending Credential")
                                             signalService?.send(
                                                     viewModel
@@ -920,7 +920,7 @@ class AnswerActivity : AppCompatActivity() {
                                     },
                                     { _, state ->
                                         Log.d(TAG, "onStateChange($state)")
-                                        if (state === "OPEN") {
+                                        if (state == "OPEN") {
                                             Log.d(TAG, "Sending Credential")
                                             signalService?.send(
                                                     viewModel

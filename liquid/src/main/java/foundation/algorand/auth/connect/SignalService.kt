@@ -45,11 +45,65 @@ class SignalService : Service() {
     // Service Binder
     var mBinder: IBinder = LocalBinder()
 
+    // --- Offline message queue -------------------------------------------
+    // Buffer for data-channel messages that arrive while the consuming app is
+    // offline (its JS listener is not attached / it has been backgrounded or
+    // closed). They are replayed to [messageSink] in arrival order once the
+    // app comes back online (see [setActive]). This is a generic mechanism:
+    // the shared library never inspects message contents — the consumer
+    // decides which channels are buffered ([queueChannels]).
+    private val messageQueue = ArrayDeque<Pair<String, String>>()
+    @Volatile
+    private var messageSink: ((label: String, msg: String) -> Unit)? = null
+    // Channels whose messages are buffered while offline. `null` means buffer
+    // every channel; an empty set means buffer none.
+    private var queueChannels: Set<String>? = null
+    // App-controlled online flag. `null` = fall back to the activity's window
+    // focus (legacy behavior); once the consumer calls [setActive] it takes
+    // over so the app — not the library — owns the delivery state.
+    private var appActiveOverride: Boolean? = null
+    // Cap so a long offline period can't grow the buffer unbounded; oldest
+    // messages are dropped first.
+    private var maxQueuedMessages: Int = 200
+
     /**
      * Handle Service Binding
      */
     override fun onBind(intent: Intent): IBinder {
         return mBinder
+    }
+
+    /**
+     * Keep the service running (and let the OS restart it if it is killed) so
+     * the signaling connection survives the app being backgrounded. The
+     * service is stopped only when the consumer explicitly disconnects.
+     */
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        return START_STICKY
+    }
+
+    /**
+     * The user removed the app's task (closed the app), but the foreground
+     * signaling connection must keep running until the app explicitly
+     * disconnects. Deliberately do NOT stop the service here.
+     */
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        Log.d(TAG, "Task removed; keeping the signaling service alive")
+        super.onTaskRemoved(rootIntent)
+    }
+
+    /**
+     * All bound clients have detached (e.g. the app was closed). Drop the stale
+     * message sink so buffered messages are never replayed to a dead listener;
+     * they stay queued for the next fresh listener that attaches via
+     * [handleMessages]. The started foreground service keeps running.
+     */
+    override fun onUnbind(intent: Intent?): Boolean {
+        synchronized(this) {
+            messageSink = null
+            appActiveOverride = null
+        }
+        return super.onUnbind(intent)
     }
 
     /**
@@ -118,6 +172,11 @@ class SignalService : Service() {
     fun stop() {
         signalClient?.disconnect()
         signalClient = null
+        synchronized(this) {
+            messageQueue.clear()
+            messageSink = null
+            appActiveOverride = null
+        }
     }
 
     /**
@@ -193,20 +252,52 @@ class SignalService : Service() {
         onStateChange: ((label: String, state: String?) -> Unit)? = null,
         notificationBuilder: Builder,
         notificationId: Int = LIQUID_NOTIFICATION_ID,
-        activityClass: Class<out Activity>
+        activityClass: Class<out Activity>,
+        presenter: NotificationPresenter? = null,
+        queueChannels: Set<String>? = null
     ) {
         var requestCode = 1
         val serviceIntentRequestCode = 0
+        // Remember where to deliver (and replay) messages, and which channels
+        // to buffer while offline.
+        this.messageSink = onMessage
+        this.queueChannels = queueChannels
+        // A fresh listener just attached (e.g. after a relaunch that reconnected
+        // to the still-running service). If the app is already marked online,
+        // replay anything buffered while it was gone to this new sink.
+        if (appActiveOverride == true) {
+            drainQueue()
+        }
         // Register observers on every negotiated data channel
         signalClient?.handleDataChannels({ label, msg ->
-            if (activity.hasWindowFocus()) {
+            if (isAppActive(activity)) {
+                // Online: flush anything buffered while offline first so the
+                // app's listener sees messages in arrival order, then deliver.
+                drainQueue()
                 onMessage(label, msg)
                 return@handleDataChannels
             }
-            Log.d(TAG, "DataChannel[$label] Message: $msg")
+            Log.d(TAG, "DataChannel[$label] Message (offline): $msg")
+            // Offline: buffer deliverable messages so they reach the app's
+            // listener once it comes back online.
+            if (shouldQueue(label)) {
+                enqueue(label, msg)
+            }
+            // Resolve the notification copy through the (optional) presenter. A
+            // presenter fully controls the per-message-type content and may
+            // suppress the notification entirely by returning null (e.g. for
+            // heartbeat/stream control traffic). With no presenter we keep the
+            // legacy behavior of showing the raw message text.
+            val content: NotificationContent? =
+                if (presenter != null) presenter.present(label, msg)
+                else NotificationContent(null, msg)
+            if (content == null) {
+                return@handleDataChannels
+            }
+            content.title?.let { notificationBuilder.setContentTitle(it) }
             notify(
                 notificationBuilder
-                    .setContentText(msg)
+                    .setContentText(content.text)
                     .setContentIntent(createPendingIntent(activityClass, requestCode, msg)),
                 notificationId
             )
@@ -234,6 +325,62 @@ class SignalService : Service() {
     }
 
     /**
+     * Set whether the consuming app is currently online (its JS listener is
+     * attached / it is foregrounded). The app owns this signal so it controls
+     * the signaling delivery state. When set active, any messages buffered
+     * while offline are replayed to the message sink in arrival order.
+     */
+    @Synchronized
+    fun setActive(active: Boolean) {
+        appActiveOverride = active
+        if (active) {
+            drainQueue()
+        }
+    }
+
+    /**
+     * Whether messages should be delivered live. Uses the app-controlled
+     * [appActiveOverride] when set; otherwise falls back to the activity's
+     * window focus (legacy behavior).
+     */
+    private fun isAppActive(activity: Activity): Boolean {
+        return appActiveOverride ?: activity.hasWindowFocus()
+    }
+
+    /** Whether an inbound message on [label] should be buffered while offline. */
+    private fun shouldQueue(label: String): Boolean {
+        val channels = queueChannels ?: return true
+        return label in channels
+    }
+
+    @Synchronized
+    private fun enqueue(label: String, msg: String) {
+        while (messageQueue.size >= maxQueuedMessages && messageQueue.isNotEmpty()) {
+            messageQueue.removeFirst()
+        }
+        messageQueue.addLast(label to msg)
+    }
+
+    /** Replay (and clear) every buffered message to the current sink, in order. */
+    @Synchronized
+    private fun drainQueue() {
+        val sink = messageSink ?: return
+        while (messageQueue.isNotEmpty()) {
+            val (label, msg) = messageQueue.first()
+            try {
+                sink(label, msg)
+            } catch (e: Exception) {
+                // The sink is stale/dead (e.g. the app process was killed);
+                // stop draining and keep the remaining messages buffered for
+                // the next fresh listener.
+                Log.w(TAG, "Stopped draining message queue; sink threw", e)
+                return
+            }
+            messageQueue.removeFirst()
+        }
+    }
+
+    /**
      * Send a Message over the primary (`liquid`) channel
      */
     fun send(msg: String) {
@@ -248,4 +395,23 @@ class SignalService : Service() {
         Log.d(TAG, "Sending to [$label]: $msg from $lastKnownReferer")
         peerClient?.send(label, msg)
     }
+}
+
+/**
+ * Content for a per-message notification produced by a [NotificationPresenter].
+ */
+data class NotificationContent(
+    val title: String?,
+    val text: String?
+)
+
+/**
+ * Generic seam that decides how (or whether) to present a notification for an
+ * inbound data-channel message while the app is backgrounded. Returning `null`
+ * suppresses the notification. Consumers (the RN module / wallet) fill this in
+ * with their own per-message-type copy, keeping message semantics out of the
+ * shared signaling library.
+ */
+fun interface NotificationPresenter {
+    fun present(label: String, message: String): NotificationContent?
 }
