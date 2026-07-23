@@ -70,21 +70,21 @@ class OfferActivity : AppCompatActivity() {
         lifecycleScope.launch {
             val dc = signalClient.peer(requestId, "offer", iceServers)
             Log.d(TAG, "Data Channel: $dc")
-            signalClient.handleDataChannel(dc!!, {
+            signalClient.handleDataChannel(dc!!, { _, msg ->
                 // TODO: AVM Provider Handler
-                Log.e(TAG, "onMessage($it)")
+                Log.e(TAG, "onMessage($msg)")
                 runOnUiThread {
-                    Toast.makeText(this@OfferActivity, it, Toast.LENGTH_LONG).show()
+                    Toast.makeText(this@OfferActivity, msg, Toast.LENGTH_LONG).show()
                 }
                 try {
-                    val message = JSONObject(it)
+                    val message = JSONObject(msg)
                     val wallet = message.get("address").toString()
                     viewModel.setAddress(wallet)
                 } catch (e: Exception) {
                     Log.e(TAG, "Error: $e")
                 }
-            },{
-                Log.d(TAG, "onStateChange($it)")
+            },{ _, state ->
+                Log.d(TAG, "onStateChange($state)")
             })
         }
         setContentView(binding.root)

@@ -1,6 +1,5 @@
 package foundation.algorand.auth.connect
 
-import android.R.attr.bitmap
 import android.content.Context
 import android.graphics.Bitmap
 import android.util.Log
@@ -9,19 +8,24 @@ import io.socket.client.IO
 import io.socket.client.Socket
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import org.json.JSONObject
 import org.webrtc.PeerConnection
 import org.webrtc.DataChannel
 import org.webrtc.IceCandidate
+import org.webrtc.MediaStreamTrack
 import org.webrtc.SessionDescription
 import qrcode.QRCode
 import qrcode.color.Colors
 import java.io.ByteArrayOutputStream
 import java.util.*
 import javax.inject.Inject
+import kotlin.coroutines.Continuation
 import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 import kotlin.coroutines.suspendCoroutine
 
 
@@ -57,6 +61,65 @@ class SignalClient @Inject constructor(
     override var socket: Socket? = null
     var peerClient: PeerApi? = null
     private val scope = CoroutineScope(Dispatchers.Main)
+
+    /**
+     * Server-broadcast `presence` updates for the current `requestId` room
+     * (`{ requestId, deviceCount, online }`). Set before [peer] so the listener
+     * is registered when the socket is created.
+     */
+    var onPresence: ((JSONObject) -> Unit)? = null
+
+    /**
+     * Signaling `exception` events (e.g. a `link-error` room refusal under the
+     * two-peer lockdown, carrying `event`/`reason`/`requestId`). Set before
+     * [peer] so the listener is registered when the socket is created.
+     */
+    var onLinkError: ((JSONObject) -> Unit)? = null
+
+    /**
+     * Forwarded to [PeerApi.onConnectionStateChange] when the peer is created,
+     * so callers can observe ICE connection state without a native handle.
+     */
+    var onConnectionStateChange: ((String) -> Unit)? = null
+
+    // In-flight negotiation bookkeeping, so [cancel] can abort a pending [peer].
+    private var peerJob: Job? = null
+    private var peerContinuation: Continuation<DataChannel?>? = null
+    private var peerResumed = false
+
+    /**
+     * Resume the pending [peer] continuation at most once with [result].
+     */
+    private fun resumePeer(result: DataChannel?) {
+        if (peerResumed) return
+        peerResumed = true
+        val continuation = peerContinuation
+        peerContinuation = null
+        continuation?.resume(result)
+    }
+
+    /**
+     * Fail the pending [peer] continuation at most once with [error].
+     */
+    private fun failPeer(error: Throwable) {
+        if (peerResumed) return
+        peerResumed = true
+        val continuation = peerContinuation
+        peerContinuation = null
+        continuation?.resumeWithException(error)
+    }
+
+    /**
+     * Abort an in-flight [peer] negotiation: cancel the negotiation coroutine,
+     * fail the pending continuation with a [CancellationException] so the caller
+     * unblocks promptly, and tear the socket + peer down.
+     */
+    fun cancel() {
+        peerJob?.cancel()
+        peerJob = null
+        failPeer(CancellationException("Peer negotiation cancelled"))
+        disconnect()
+    }
 
     /**
      * Generate a random Request ID
@@ -99,12 +162,24 @@ class SignalClient @Inject constructor(
      *
      * The type parameter is used to specify the type of remote peer
      */
-    override suspend fun peer(requestId: String, type: String, iceServers: List<PeerConnection.IceServer>?): DataChannel? {
+    override suspend fun peer(
+        requestId: String,
+        type: String,
+        iceServers: List<PeerConnection.IceServer>?,
+        dataChannels: Map<String, DataChannel.Init>?,
+        tracks: List<MediaStreamTrack>?
+    ): DataChannel? {
         createSocket()
         return suspendCoroutine { continuation ->
-            scope.launch {
+            peerContinuation = continuation
+            peerResumed = false
+            peerJob = scope.launch {
                 val clientType = if (type === "offer") "answer" else "offer"
                 peerClient = PeerApi(context)
+                peerClient?.onConnectionStateChange = onConnectionStateChange
+                // Note: the peer continuation is resumed at most once via
+                // resumePeer(), even though several remote data channels can
+                // arrive when the peer opens multiple channels.
                 // Buffer ICE Candidates if they arrive before the Peer Connection is established
                 val candidatesBuffer = mutableListOf<IceCandidate>()
                 // If we are waiting on an offer, create a link to the address
@@ -138,11 +213,19 @@ class SignalClient @Inject constructor(
                     },{
                         // Handle a Data Channel from the Peer
                         // This only happens for a client that creates an Answer,
-                        // Offer clients are responsible for creating a datachannel
-                        continuation.resume(it)
+                        // Offer clients are responsible for creating a datachannel.
+                        // A peer can open several named channels; resume with the
+                        // first one (preferring `liquid`), and let the remaining
+                        // channels populate `peerClient.dataChannels`.
+                        resumePeer(it)
                     },
                     iceServers
                 )
+
+                // Add any local media tracks before negotiation begins
+                tracks?.forEach { track ->
+                    peerClient?.addTrack(track)
+                }
 
                 // Wait for Offer, then create Answer
                 if (type === "offer") {
@@ -168,8 +251,19 @@ class SignalClient @Inject constructor(
                 }
                 // Create an Offer, wait for answer
                 else if (type === "answer") {
-                    // Create the DataChannel
-                    val dc = peerClient?.createDataChannel("liquid")
+                    // Create the DataChannel(s). Defaults to a single `liquid`
+                    // channel, but callers may request several named channels.
+                    val channelConfig = if (dataChannels.isNullOrEmpty()) {
+                        mapOf("liquid" to DataChannel.Init())
+                    } else {
+                        dataChannels
+                    }
+                    val channels = mutableMapOf<String, DataChannel>()
+                    channelConfig.forEach { (label, init) ->
+                        peerClient?.createDataChannel(label, init)?.let { channels[label] = it }
+                    }
+                    // Prefer the `liquid` channel, otherwise fall back to the first
+                    val dc = channels["liquid"] ?: channels.values.firstOrNull()
                     // Create the Peering Offer
                     val offer = peerClient?.createOffer()
                     peerClient?.setLocalDescription(offer!!) {
@@ -191,25 +285,43 @@ class SignalClient @Inject constructor(
                             }
                         }
                     }
-                    continuation.resume(dc)
+                    resumePeer(dc)
                 }
             }
         }
     }
 
+    /**
+     * Register observers on a single named data channel.
+     */
     fun handleDataChannel(
         dataChannel: DataChannel,
-        onMessage: (String) -> Unit,
-        onStateChange: ((String?) -> Unit)? = null,
-        onBufferedAmountChange: ((Long) -> Unit)? = null
+        onMessage: (label: String, message: String) -> Unit,
+        onStateChange: ((label: String, state: String?) -> Unit)? = null,
+        onBufferedAmountChange: ((label: String, amount: Long) -> Unit)? = null
     ) {
         dataChannel.registerObserver(
             peerClient!!.createDataChannelObserver(
+                dataChannel,
+                dataChannel.label(),
                 onMessage,
                 onStateChange,
                 onBufferedAmountChange
             )
         )
+    }
+
+    /**
+     * Register observers on every negotiated data channel.
+     */
+    fun handleDataChannels(
+        onMessage: (label: String, message: String) -> Unit,
+        onStateChange: ((label: String, state: String?) -> Unit)? = null,
+        onBufferedAmountChange: ((label: String, amount: Long) -> Unit)? = null
+    ) {
+        peerClient?.dataChannels?.values?.forEach { channel ->
+            handleDataChannel(channel, onMessage, onStateChange, onBufferedAmountChange)
+        }
     }
 
     /**
@@ -258,6 +370,14 @@ class SignalClient @Inject constructor(
 
         // Connect to the messages origin
         socket = IO.socket(url, options)
+        // Forward server-broadcast presence updates and signaling exceptions
+        // (e.g. link-error room refusals) to the registered callbacks.
+        socket?.on("presence") { args ->
+            (args.getOrNull(0) as? JSONObject)?.let { onPresence?.invoke(it) }
+        }
+        socket?.on("exception") { args ->
+            (args.getOrNull(0) as? JSONObject)?.let { onLinkError?.invoke(it) }
+        }
         socket?.connect()
     }
 

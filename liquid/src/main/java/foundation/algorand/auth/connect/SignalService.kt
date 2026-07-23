@@ -11,7 +11,9 @@ import android.util.Log
 import androidx.core.app.NotificationCompat.Builder
 import androidx.core.app.ServiceCompat
 import okhttp3.OkHttpClient
+import org.json.JSONObject
 import org.webrtc.DataChannel
+import org.webrtc.MediaStreamTrack
 import org.webrtc.PeerConnection
 
 
@@ -120,15 +122,45 @@ class SignalService : Service() {
 
     /**
      * Connect to a Peer by Request ID
+     *
+     * @param dataChannels optional map of channel label -> [DataChannel.Init] to
+     *   open (defaults to a single `liquid` channel).
+     * @param tracks optional local media tracks to add before negotiation.
+     * @param onTrack optional callback invoked when a remote media track arrives.
+     * @param onPresence optional callback for server-broadcast `presence`
+     *   updates for the `requestId` room.
+     * @param onLinkError optional callback for signaling `exception` events
+     *   (e.g. `link-error` room refusals).
+     * @param onConnectionStateChange optional callback for peer ICE connection
+     *   state changes (`CONNECTED`, `DISCONNECTED`, `FAILED`, ...).
      */
     suspend fun peer(
         requestId: String,
         type: String,
         iceServers: List<PeerConnection.IceServer>,
+        dataChannels: Map<String, DataChannel.Init>? = null,
+        tracks: List<MediaStreamTrack>? = null,
+        onTrack: ((MediaStreamTrack) -> Unit)? = null,
+        onPresence: ((JSONObject) -> Unit)? = null,
+        onLinkError: ((JSONObject) -> Unit)? = null,
+        onConnectionStateChange: ((String) -> Unit)? = null,
     ) {
-        dataChannel = signalClient?.peer(requestId, type, iceServers)
+        // Register the socket/peer callbacks before negotiation so the socket
+        // listeners (presence/exception) are attached when it is created.
+        signalClient?.onPresence = onPresence
+        signalClient?.onLinkError = onLinkError
+        signalClient?.onConnectionStateChange = onConnectionStateChange
+        dataChannel = signalClient?.peer(requestId, type, iceServers, dataChannels, tracks)
         peerClient = signalClient?.peerClient
+        peerClient?.onTrack = onTrack
         peerConnection = peerClient?.peerConnection
+    }
+
+    /**
+     * Abort an in-flight [peer] negotiation without stopping the service.
+     */
+    fun cancel() {
+        signalClient?.cancel()
     }
     /**
      * Create a PendingIntent
@@ -157,43 +189,40 @@ class SignalService : Service() {
      */
     fun handleMessages(
         activity: Activity,
-        onMessage: (msg: String) -> Unit,
-        onStateChange: ((state: String?) -> Unit)? = null,
+        onMessage: (label: String, msg: String) -> Unit,
+        onStateChange: ((label: String, state: String?) -> Unit)? = null,
         notificationBuilder: Builder,
         notificationId: Int = LIQUID_NOTIFICATION_ID,
         activityClass: Class<out Activity>
     ) {
         var requestCode = 1
-        var serviceIntentRequestCode = 0
-        // If the Data Channel is available, handle messages
-        dataChannel?.let {
-            // Handle Data Channel Messages
-            signalClient?.handleDataChannel(it, { msg ->
-                if (activity.hasWindowFocus()) {
-                    onMessage(msg)
-                    return@handleDataChannel
-                }
-                Log.d(TAG, "DataChannel Message: $msg")
+        val serviceIntentRequestCode = 0
+        // Register observers on every negotiated data channel
+        signalClient?.handleDataChannels({ label, msg ->
+            if (activity.hasWindowFocus()) {
+                onMessage(label, msg)
+                return@handleDataChannels
+            }
+            Log.d(TAG, "DataChannel[$label] Message: $msg")
+            notify(
+                notificationBuilder
+                    .setContentText(msg)
+                    .setContentIntent(createPendingIntent(activityClass, requestCode, msg)),
+                notificationId
+            )
+            requestCode += 1
+        }, { label, state ->
+            if (state == "CLOSED" || state == "CLOSING") {
                 notify(
                     notificationBuilder
-                        .setContentText(msg)
-                        .setContentIntent(createPendingIntent(activityClass, requestCode, msg)),
-                    notificationId
+                        .setContentText("Tap to open the app.")
+                        .setOnlyAlertOnce(true)
+                        .setContentIntent(createPendingIntent(activityClass, serviceIntentRequestCode,null))
+                , notificationId
                 )
-                requestCode += 1
-            }, { state ->
-                if (state == "CLOSED" || state == "CLOSING") {
-                    notify(
-                        notificationBuilder
-                            .setContentText("Tap to open the app.")
-                            .setOnlyAlertOnce(true)
-                            .setContentIntent(createPendingIntent(activityClass, serviceIntentRequestCode,null))
-                    , notificationId
-                    )
-                }
-                onStateChange?.invoke(state)
-            })
-        }
+            }
+            onStateChange?.invoke(label, state)
+        })
     }
 
     fun updateLastKnownReferer(referer: String?) {
@@ -205,12 +234,18 @@ class SignalService : Service() {
     }
 
     /**
-     * Send a Message
+     * Send a Message over the primary (`liquid`) channel
      */
     fun send(msg: String) {
         Log.d(TAG, "Sending: $msg from $lastKnownReferer")
-        if (dataChannel != null) {
-            peerClient?.send(msg)
-        }
+        peerClient?.send(msg)
+    }
+
+    /**
+     * Send a Message over a specific named channel
+     */
+    fun send(label: String, msg: String) {
+        Log.d(TAG, "Sending to [$label]: $msg from $lastKnownReferer")
+        peerClient?.send(label, msg)
     }
 }

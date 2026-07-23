@@ -795,13 +795,13 @@ class AnswerActivity : AppCompatActivity() {
                             }
                             signalService?.handleMessages(
                                     this@AnswerActivity,
-                                    { peerMsg ->
+                                    { _, peerMsg ->
                                         Log.d(TAG, "handleMessages($peerMsg)")
                                         handleMessages(peerMsg)
                                     },
-                                    {
-                                        Log.d(TAG, "onStateChange($it)")
-                                        if (it === "OPEN") {
+                                    { _, state ->
+                                        Log.d(TAG, "onStateChange($state)")
+                                        if (state === "OPEN") {
                                             Log.d(TAG, "Sending Credential")
                                             signalService?.send(
                                                     viewModel
@@ -914,13 +914,13 @@ class AnswerActivity : AppCompatActivity() {
                             }
                             signalService?.handleMessages(
                                     this@AnswerActivity,
-                                    { peerMsg ->
+                                    { _, peerMsg ->
                                         Log.d(TAG, "handleMessages($peerMsg)")
                                         handleMessages(peerMsg)
                                     },
-                                    {
-                                        Log.d(TAG, "onStateChange($it)")
-                                        if (it === "OPEN") {
+                                    { _, state ->
+                                        Log.d(TAG, "onStateChange($state)")
+                                        if (state === "OPEN") {
                                             Log.d(TAG, "Sending Credential")
                                             signalService?.send(
                                                     viewModel

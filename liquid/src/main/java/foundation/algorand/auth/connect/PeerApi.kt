@@ -12,8 +12,23 @@ class PeerApi(context: Context) {
         const val TAG = "connect.PeerApi"
     }
 
-    // Data Channel to send and receive messages
+    // Primary Data Channel to send and receive messages (kept for backwards
+    // compatibility). Points at the `liquid` channel when present, otherwise the
+    // most recently created/received channel.
     private var dataChannel: DataChannel? = null
+
+    // All negotiated Data Channels, keyed by their label. This allows callers to
+    // open and address multiple named channels (e.g. `ac2-v1`, `ac2-stream`).
+    val dataChannels = mutableMapOf<String, DataChannel>()
+
+    // Invoked when a remote media track is added to the connection.
+    var onTrack: ((MediaStreamTrack) -> Unit)? = null
+
+    // Invoked when the peer connection's ICE connection state changes
+    // (e.g. `CONNECTED`, `DISCONNECTED`, `FAILED`). Lets consumers monitor
+    // connectivity/reduced connection stats without a direct handle on the
+    // native `PeerConnection`.
+    var onConnectionStateChange: ((String) -> Unit)? = null
 
     // Create the Peer Connection Factory
     private var peerConnectionFactory: PeerConnectionFactory
@@ -62,12 +77,16 @@ class PeerApi(context: Context) {
 
                 override fun onDataChannel(p0: DataChannel?) {
                     Log.d(TAG, "onDataChannel($p0)")
-                    dataChannel = p0
-                    onDataChannel(p0!!)
+                    p0?.let {
+                        dataChannels[it.label()] = it
+                        dataChannel = it
+                        onDataChannel(it)
+                    }
                 }
 
                 override fun onIceConnectionChange(p0: PeerConnection.IceConnectionState?) {
                     Log.d(TAG, "onIceConnectionChange($p0)")
+                    p0?.let { onConnectionStateChange?.invoke(it.toString()) }
                     if (p0 === PeerConnection.IceConnectionState.FAILED) {
                         Log.e(TAG, "ICE Connection Failed")
                     }
@@ -103,6 +122,7 @@ class PeerApi(context: Context) {
 
                 override fun onAddTrack(p0: RtpReceiver?, p1: Array<out MediaStream>?) {
                     Log.d(TAG, "onAddTrack($p0, $p1)")
+                    p0?.track()?.let { onTrack?.invoke(it) }
                 }
             }
         )
@@ -116,6 +136,19 @@ class PeerApi(context: Context) {
             },iceServers)
         }
     }
+    /**
+     * Add a local media track to the Peer Connection.
+     *
+     * Mirrors the `options.tracks` handling in the `liquid-auth-js` client,
+     * where each supplied track is added to the peer before negotiation.
+     */
+    fun addTrack(track: MediaStreamTrack, streamIds: List<String> = emptyList()) {
+        if (peerConnection === null) {
+            throw Exception("peerConnection is null, ensure you are connected")
+        }
+        peerConnection?.addTrack(track, streamIds)
+    }
+
     /**
      * Add an ICE Candidate
      */
@@ -223,67 +256,105 @@ class PeerApi(context: Context) {
         }
     }
 
+    /**
+     * Create an observer for a specific [dataChannel].
+     *
+     * The channel `label` is forwarded to every callback so multiple named
+     * channels can be multiplexed onto the same handlers.
+     */
     fun createDataChannelObserver(
-        onMessage: (String) -> Unit,
-        onStateChange: ((String?) -> Unit)? = null,
-        onBufferedAmountChange: ((Long) -> Unit)? = null
+        dataChannel: DataChannel,
+        label: String,
+        onMessage: (label: String, message: String) -> Unit,
+        onStateChange: ((label: String, state: String?) -> Unit)? = null,
+        onBufferedAmountChange: ((label: String, amount: Long) -> Unit)? = null
     ): DataChannel.Observer {
         if (peerConnection === null) {
             throw Exception("peerConnection is null")
         }
         return object : DataChannel.Observer {
             override fun onBufferedAmountChange(p0: Long) {
-                Log.d(TAG, "onBufferedAmountChange($p0)")
-                onBufferedAmountChange?.invoke(p0)
+                Log.d(TAG, "onBufferedAmountChange($label, $p0)")
+                onBufferedAmountChange?.invoke(label, p0)
             }
 
             override fun onStateChange() {
-                Log.d(TAG, "onStateChange")
-                onStateChange?.invoke(dataChannel?.state().toString())
+                Log.d(TAG, "onStateChange($label)")
+                onStateChange?.invoke(label, dataChannel.state().toString())
             }
 
             /**
              * Handle DataChannel messages
-             *
-             * @todo: Implement Web Provider API messages
              */
             override fun onMessage(p0: DataChannel.Buffer?) {
-                Log.d(TAG, "onMessage($p0)")
+                Log.d(TAG, "onMessage($label, $p0)")
                 p0?.data?.let {
                     val bytes = ByteArray(it.remaining())
                     p0.data.get(bytes)
                     val payload = String(bytes)
-                    onMessage(payload)
+                    onMessage(label, payload)
                 }
             }
         }
     }
 
-    fun createDataChannel(label: String): DataChannel? {
+    /**
+     * Create a named Data Channel.
+     *
+     * The optional [init] mirrors `RTCDataChannelInit` from `liquid-auth-js`
+     * (`ordered`, `maxRetransmits`, `negotiated`, etc.). The created channel is
+     * tracked by label so it can be addressed later via [send] or [getDataChannel].
+     */
+    fun createDataChannel(label: String, init: DataChannel.Init = DataChannel.Init()): DataChannel? {
         if (peerConnection === null) {
             throw Exception("peerConnection is null")
         }
-        dataChannel?.close()
-        dataChannel = peerConnection?.createDataChannel(label, DataChannel.Init())
-        return dataChannel
+        dataChannels[label]?.close()
+        val channel = peerConnection?.createDataChannel(label, init)
+        if (channel != null) {
+            dataChannels[label] = channel
+            dataChannel = channel
+        }
+        return channel
     }
 
+    /**
+     * Lookup a previously negotiated channel by label.
+     */
+    fun getDataChannel(label: String): DataChannel? {
+        return dataChannels[label]
+    }
+
+    /**
+     * Send a message over the primary (or `liquid`) channel.
+     */
     fun send(message: String) {
-        if (dataChannel === null) {
-            throw Exception("dataChannel is null")
-        }
-        dataChannel?.state()?.let {
-            if (it !== DataChannel.State.OPEN) {
-                throw Exception("dataChannel is not open")
-            }
+        val channel = dataChannels["liquid"] ?: dataChannel
+            ?: throw Exception("dataChannel is null")
+        sendToChannel(channel, message)
+    }
+
+    /**
+     * Send a message over a specific named channel.
+     */
+    fun send(label: String, message: String) {
+        val channel = dataChannels[label]
+            ?: throw Exception("dataChannel '$label' is null")
+        sendToChannel(channel, message)
+    }
+
+    private fun sendToChannel(channel: DataChannel, message: String) {
+        if (channel.state() !== DataChannel.State.OPEN) {
+            throw Exception("dataChannel '${channel.label()}' is not open")
         }
         val buffer = ByteBuffer.wrap(message.toByteArray())
-        dataChannel?.send(DataChannel.Buffer(buffer, false))
+        channel.send(DataChannel.Buffer(buffer, false))
     }
 
     fun destroy() {
+        dataChannels.values.forEach { it.close() }
+        dataChannels.clear()
         dataChannel?.close()
-//        dataChannel?.dispose()
         peerConnection?.close()
         peerConnection?.dispose()
         peerConnection = null
