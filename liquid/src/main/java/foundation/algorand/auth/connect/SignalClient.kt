@@ -10,6 +10,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import org.json.JSONObject
@@ -52,6 +54,18 @@ class SignalClient @Inject constructor(
 ) : SignalInterface {
     companion object {
         const val TAG = "connect.SignalClient"
+
+        /**
+         * How often the answer-mode peer re-emits its `offer-description`
+         * while waiting for the remote `answer-description`. The signaling
+         * server only relays the offer to peers ALREADY in the room, so a
+         * remote that (re)joins moments after the first emit (the classic
+         * agent-restart race) would otherwise never see it and the
+         * negotiation would stall until the caller's deadline. The remote
+         * waits with a one-shot listener, so duplicates are harmless.
+         */
+        const val OFFER_RESEND_INTERVAL_MS = 5_000L
+
         fun generateRequestId(): String {
             return SignalInterface.generateRequestId()
         }
@@ -273,7 +287,22 @@ class SignalClient @Inject constructor(
                     }
                     Log.d(TAG, "peer.createOffer(${offer?.description})")
                     socket!!.emit("offer-description", offer?.description.toString())
-                    val sdp = signal(type)
+                    // Re-emit the offer until the answer arrives, so a remote
+                    // peer that joined the room AFTER the first emit (e.g. an
+                    // agent that just restarted) still receives it instead of
+                    // leaving this negotiation to stall out its deadline.
+                    val offerResendJob = launch {
+                        while (isActive) {
+                            delay(OFFER_RESEND_INTERVAL_MS)
+                            Log.d(TAG, "re-emitting offer-description (no answer yet)")
+                            socket?.emit("offer-description", offer?.description.toString())
+                        }
+                    }
+                    val sdp = try {
+                        signal(type)
+                    } finally {
+                        offerResendJob.cancel()
+                    }
                     Log.d(TAG, "peer.onAnswer(${sdp})")
                     peerClient!!.setRemoteDescription(sdp) {
                         if(it === null){
