@@ -352,9 +352,31 @@ class PeerApi(context: Context) {
     }
 
     fun destroy() {
-        dataChannels.values.forEach { it.close() }
+        // Unregister each channel's observer BEFORE closing it. Closing a
+        // channel drives it to CLOSING/CLOSED, and a still-registered observer
+        // reports that state through the shared (module-wide) onStateChange
+        // sink, which is keyed only by channel label. If a previous peer is
+        // torn down while a NEW negotiation for the same labels (e.g. `ac2-v1`)
+        // is already live, those stale CLOSED events would be mis-delivered to
+        // the new channel and close a healthy connection. Detaching the
+        // observer first makes a destroyed peer go silent.
+        dataChannels.values.forEach {
+            try {
+                it.unregisterObserver()
+            } catch (e: Exception) {
+                // No observer was registered (or already detached) — safe to ignore.
+            }
+            it.close()
+        }
         dataChannels.clear()
-        dataChannel?.close()
+        dataChannel?.let {
+            try {
+                it.unregisterObserver()
+            } catch (e: Exception) {
+                // No observer was registered (or already detached) — safe to ignore.
+            }
+            it.close()
+        }
         peerConnection?.close()
         peerConnection?.dispose()
         peerConnection = null
